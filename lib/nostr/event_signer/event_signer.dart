@@ -9,7 +9,12 @@ abstract class EventSigner {
 
   Future<String?> encrypt04(String msg, String destPubKey, {String? id});
 
-  Future<Event?> encrypt04Event(String msg, String destPubKey, {String? id});
+  Future<Event?> encrypt04Event(
+    String msg,
+    String destPubKey, {
+    String? id,
+    String? replyId,
+  });
 
   Future<String?> decrypt44(String msg, String destPubKey, {String? id});
 
