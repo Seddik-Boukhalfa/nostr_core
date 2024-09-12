@@ -653,6 +653,34 @@ class NostrCore {
       }
 
       final isSuccessful = await publish(contactList.toEvent(), relays);
+
+      if (isSuccessful) {
+        await cacheManager.saveContactList(contactList);
+      }
+    }
+
+    return contactList;
+  }
+
+  Future<ContactList> publishAddContacts(
+    List<String> toAdd,
+    List<String> relays,
+    EventSigner signer,
+    OKCallBack okCallBack,
+  ) async {
+    ContactList contactList = await ensureUpToDateContactListOrEmpty(signer);
+
+    if (toAdd.isNotEmpty) {
+      for (final p in toAdd) {
+        if (!contactList.contacts.contains(p)) {
+          contactList.contacts.add(p);
+          contactList.loadedTimestamp = Helpers.now;
+          contactList.createdAt = Helpers.now;
+        }
+      }
+
+      final isSuccessful = await publish(contactList.toEvent(), relays);
+
       if (isSuccessful) {
         await cacheManager.saveContactList(contactList);
       }

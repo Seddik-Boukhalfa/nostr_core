@@ -43,6 +43,7 @@ class AmberEventSigner implements EventSigner {
       pubKey: destPubKey,
       id: id,
     );
+
     return map['signature'];
   }
 

@@ -23,6 +23,18 @@ class UserRelayList {
       .where((entry) => entry.value.isRead)
       .map((entry) => entry.key);
 
+  List<String> get reads => relays.keys
+      .where((relay) =>
+          relays[relay] == ReadWriteMarker.readOnly ||
+          relays[relay] == ReadWriteMarker.readWrite)
+      .toList();
+
+  List<String> get writes => relays.keys
+      .where((relay) =>
+          relays[relay] == ReadWriteMarker.writeOnly ||
+          relays[relay] == ReadWriteMarker.readWrite)
+      .toList();
+
   static UserRelayList fromNip65(Nip65 nip65) {
     return UserRelayList(
       pubkey: nip65.pubkey,
