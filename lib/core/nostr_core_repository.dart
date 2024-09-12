@@ -656,13 +656,15 @@ class NostrCore {
 
       if (isSuccessful) {
         await cacheManager.saveContactList(contactList);
+      } else {
+        return null;
       }
     }
 
     return contactList;
   }
 
-  Future<ContactList> publishAddContacts(
+  Future<ContactList?> publishAddContacts(
     List<String> toAdd,
     List<String> relays,
     EventSigner signer,
@@ -682,13 +684,15 @@ class NostrCore {
 
       if (isSuccessful) {
         await cacheManager.saveContactList(contactList);
+      } else {
+        return null;
       }
     }
 
     return contactList;
   }
 
-  Future<ContactList> publishUpdateContacts(
+  Future<ContactList?> publishUpdateContacts(
     List<String> pubkeys,
     List<String> relays,
     EventSigner signer,
@@ -715,6 +719,8 @@ class NostrCore {
 
       if (isSuccessful) {
         await cacheManager.saveContactList(contactList);
+      } else {
+        return null;
       }
     }
 
