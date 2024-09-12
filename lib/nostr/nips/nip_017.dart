@@ -64,14 +64,14 @@ class Nip17 {
     String encodedEvent = jsonEncode(event);
     String content = await Nip44.encryptContent(encodedEvent, receiver, signer);
 
-    final n01 = Event.genEvent(
+    final ev = Event.genEvent(
       signer: signer,
       kind: EventKind.SEALED_EVENT,
       tags: [],
       content: content,
     );
 
-    return n01;
+    return ev;
   }
 
   static Future<Event> _decodeSealedGossip(

@@ -726,6 +726,14 @@ class NostrCore {
   }
 
   //********************************************** User relay list *************************************************************/
+  RelaySet? getRelaySet(String name, String pubKey) {
+    return cacheManager.loadRelaySet(name, pubKey);
+  }
+
+  Future<void> saveRelaySet(RelaySet relaySet) async {
+    return cacheManager.saveRelaySet(relaySet);
+  }
+
   Future<RelaySet> calculateRelaySet({
     required String name,
     required String ownerPubKey,

@@ -120,6 +120,14 @@ class Nip4 {
     return y % BigInt.two == BigInt.zero /* even */ ? y : curveP - y;
   }
 
+  static List<List<String>> toTags(String p, String e, int? expiration) {
+    List<List<String>> result = [];
+    result.add(["p", p]);
+    if (e.isNotEmpty) result.add(["e", e, '', 'reply']);
+    if (expiration != null) result.add(['expiration', expiration.toString()]);
+    return result;
+  }
+
   static String generate16RandomHexChars() {
     final random = Random.secure();
     final randomBytes = List<int>.generate(16, (i) => random.nextInt(256));

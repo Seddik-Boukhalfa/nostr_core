@@ -1,13 +1,8 @@
 import 'dart:convert';
 
 import 'package:amberflutter/amberflutter.dart';
-import 'package:nostr_core/nostr/event.dart';
-import 'package:nostr_core/nostr/event_signer/bip340.dart';
-import 'package:nostr_core/nostr/event_signer/keychain.dart';
-import 'package:nostr_core/nostr/nips/nip_019.dart';
+import 'package:nostr_core/nostr/nostr.dart';
 import 'package:nostr_core/utils/static_properties.dart';
-
-import 'event_signer.dart';
 
 class AmberEventSigner implements EventSigner {
   final amber = Amberflutter();
@@ -65,6 +60,27 @@ class AmberEventSigner implements EventSigner {
     );
 
     return map['signature'];
+  }
+
+  @override
+  Future<Event?> encrypt04Event(
+    String msg,
+    String destPubKey, {
+    String? id,
+    String? replyId,
+  }) async {
+    final encryption = await encrypt04(msg, destPubKey);
+
+    if (encryption != null) {
+      return await Event.genEvent(
+        kind: EventKind.DIRECT_MESSAGE,
+        tags: Nip4.toTags(destPubKey, replyId ?? '', null),
+        content: encryption,
+        signer: this,
+      );
+    }
+
+    return null;
   }
 
   @override

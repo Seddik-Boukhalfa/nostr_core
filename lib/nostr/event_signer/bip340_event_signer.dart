@@ -3,8 +3,7 @@ import 'package:nostr_core/nostr/event_signer/bip340.dart';
 import 'package:nostr_core/nostr/nips/nip_004.dart';
 import 'package:nostr_core/nostr/nips/nip_017.dart';
 import 'package:nostr_core/nostr/nips/nip_044.dart';
-import 'package:nostr_core/utils/helpers.dart';
-import 'package:nostr_core/utils/string_utils.dart';
+import 'package:nostr_core/utils/utils.dart';
 
 import 'event_signer.dart';
 
@@ -34,6 +33,27 @@ class Bip340EventSigner implements EventSigner {
   @override
   Future<String?> encrypt04(String msg, String destPubKey, {String? id}) async {
     return Nip4.encrypt(privateKey!, destPubKey, msg);
+  }
+
+  @override
+  Future<Event?> encrypt04Event(
+    String msg,
+    String destPubKey, {
+    String? id,
+    String? replyId,
+  }) async {
+    final encryption = await encrypt04(msg, destPubKey);
+
+    if (encryption != null) {
+      return await Event.genEvent(
+        kind: EventKind.DIRECT_MESSAGE,
+        tags: Nip4.toTags(destPubKey, replyId ?? '', null),
+        content: encryption,
+        signer: this,
+      );
+    }
+
+    return null;
   }
 
   @override
