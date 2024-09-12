@@ -666,7 +666,6 @@ class NostrCore {
     List<String> toAdd,
     List<String> relays,
     EventSigner signer,
-    OKCallBack okCallBack,
   ) async {
     ContactList contactList = await ensureUpToDateContactListOrEmpty(signer);
 
@@ -680,6 +679,39 @@ class NostrCore {
       }
 
       final isSuccessful = await publish(contactList.toEvent(), relays);
+
+      if (isSuccessful) {
+        await cacheManager.saveContactList(contactList);
+      }
+    }
+
+    return contactList;
+  }
+
+  Future<ContactList> publishUpdateContacts(
+    List<String> pubkeys,
+    List<String> relays,
+    EventSigner signer,
+  ) async {
+    ContactList contactList = await ensureUpToDateContactListOrEmpty(signer);
+
+    if (pubkeys.isNotEmpty) {
+      for (final p in pubkeys) {
+        if (!contactList.contacts.contains(p)) {
+          contactList.contacts.add(p);
+          contactList.loadedTimestamp = Helpers.now;
+          contactList.createdAt = Helpers.now;
+        } else {
+          contactList.contacts.remove(p);
+          contactList.loadedTimestamp = Helpers.now;
+          contactList.createdAt = Helpers.now;
+        }
+      }
+
+      final isSuccessful = await publish(
+        contactList.toEvent(),
+        relays,
+      );
 
       if (isSuccessful) {
         await cacheManager.saveContactList(contactList);
