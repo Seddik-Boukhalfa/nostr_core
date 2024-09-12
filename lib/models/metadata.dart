@@ -78,13 +78,13 @@ class Metadata {
   }
 
   Map<String, dynamic> toFullJson() {
-    var data = toJson();
+    var data = toMap();
     data['pub_key'] = pubkey;
 
     return data;
   }
 
-  Map<String, dynamic> toJson() {
+  Map<String, dynamic> toMap() {
     final Map<String, dynamic> data = <String, dynamic>{};
     data['name'] = name;
     data['display_name'] = displayName;
@@ -98,6 +98,10 @@ class Metadata {
     data['is_deleted'] = isDeleted;
 
     return data;
+  }
+
+  String toJson() {
+    return jsonEncode(toMap());
   }
 
   static Metadata fromEvent(Event event) {
