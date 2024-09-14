@@ -55,4 +55,6 @@ abstract class CacheManager {
   List<DMSessionInfo?> loadDmSessionsInfos(List<String> ids);
   Future<void> removeDmSessionsInfo(String id);
   Future<void> removeAllDmSessionsInfo();
+
+  Future<void> clearCache();
 }

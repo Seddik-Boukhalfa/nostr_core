@@ -452,4 +452,18 @@ class DbCacheManager extends CacheManager {
       );
     });
   }
+
+  @override
+  Future<void> clearCache() async {
+    Future.wait(
+      [
+        removeAllContactLists(),
+        removeAllEvents(),
+        removeAllMetadatas(),
+        removeAllNip05s(),
+        removeAllRelaySets(),
+        removeAllUserRelayLists(),
+      ],
+    );
+  }
 }
