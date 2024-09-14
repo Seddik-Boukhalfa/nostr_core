@@ -223,7 +223,9 @@ class NostrCore {
           timeOut: timeOut,
           shouldClose: unCompletedRelays.isEmpty,
           onClose: () {
-            completer.complete(id);
+            if (!completer.isCompleted) {
+              completer.complete(id);
+            }
           },
         );
 
