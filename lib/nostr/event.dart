@@ -190,6 +190,20 @@ class Event {
         'sig': sig
       };
 
+  Map<String, dynamic> toDetailedJson() => {
+        'id': id,
+        'pubkey': pubkey,
+        'created_at': createdAt,
+        'kind': kind,
+        'tags': tags,
+        'content': content,
+        'sig': sig,
+        'currentUser': currentUser,
+        'lastUpdated': lastUpdated,
+        'seenOn': seenOn,
+        'subscriptionId': subscriptionId,
+      };
+
   String toJsonString() => jsonEncode(
         {
           'id': id,
@@ -323,6 +337,7 @@ class Event {
         tags: tags,
         content: content,
         subscriptionId: subscriptionId,
+        currentUser: signer.getPublicKey(),
         verify: verify,
       );
 

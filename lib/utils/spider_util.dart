@@ -1,3 +1,5 @@
+import 'package:logger/logger.dart';
+
 class SpiderUtil {
   static String subUntil(String content, String before, String end) {
     var beforeLength = before.length;
@@ -14,3 +16,5 @@ class SpiderUtil {
     return content.substring(index + beforeLength, index2);
   }
 }
+
+final logger = Logger();

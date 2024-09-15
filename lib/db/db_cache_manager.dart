@@ -32,7 +32,7 @@ class DbCacheManager extends CacheManager {
     }
 
     isar = Isar.open(
-      name: "db_ndk_${kDebugMode ? "debug" : "release"}",
+      name: "nostr_core_${kDebugMode ? "debug" : "release"}",
       inspector: kDebugMode,
       maxSizeMiB: 1024,
       compactOnLaunch: const CompactCondition(
@@ -50,7 +50,7 @@ class DbCacheManager extends CacheManager {
         DbContactListSchema,
         DbMetadataSchema,
         DbNip05Schema,
-        DbMetadataSchema,
+        DbDmSessionInfoSchema,
       ],
     );
   }
@@ -352,10 +352,19 @@ class DbCacheManager extends CacheManager {
   }
 
   @override
-  List<Event> loadEvents(
-      {List<String>? pubKeys, List<int>? kinds, String? pTag}) {
+  List<Event> loadEvents({
+    List<String>? pubKeys,
+    List<int>? kinds,
+    String? pTag,
+    String? currentUser,
+  }) {
     List<Event> events = isar.dbEvents
         .where()
+        .optional(
+          Helpers.isNotBlank(currentUser),
+          (q) => q.currentUserEqualTo(currentUser!),
+        )
+        .and()
         .optional(kinds != null && kinds.isNotEmpty,
             (q) => q.anyOf(kinds!, (q, kind) => q.kindEqualTo(kind)))
         .and()
@@ -364,6 +373,7 @@ class DbCacheManager extends CacheManager {
         .and()
         .optional(Helpers.isNotBlank(pTag), (q) => q.pTagsElementEqualTo(pTag!))
         .findAll();
+
     return eventFilter != null
         ? events.where((event) => eventFilter!.filter(event)).toList()
         : events;
@@ -414,8 +424,8 @@ class DbCacheManager extends CacheManager {
   // *********************************************************************************************
 
   @override
-  DMSessionInfo? loadDmSessionsInfo(String id) {
-    return isar.dbDmSessionInfos.get(id);
+  List<DMSessionInfo> loadDmSessionsInfo(String id) {
+    return isar.dbDmSessionInfos.where().idStartsWith(id).findAll();
   }
 
   @override

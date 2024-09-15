@@ -48,6 +48,7 @@ dependencies:
   isar: ^4.0.0-dev.14
   isar_flutter_libs: ^4.0.0-dev.14
   kepler: ^1.0.3
+  logger: ^2.4.0
   path_provider: ^2.1.4
   pointycastle: ^3.9.1
   url_launcher: ^6.3.0

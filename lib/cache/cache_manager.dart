@@ -10,7 +10,12 @@ abstract class CacheManager {
   Future<void> saveEvent(Event event);
   Future<void> saveEvents(List<Event> events);
   Event? loadEvent(String id, bool r);
-  List<Event> loadEvents({List<String> pubKeys, List<int> kinds, String? pTag});
+  List<Event> loadEvents({
+    List<String> pubKeys,
+    List<int> kinds,
+    String? pTag,
+    String? currentUser,
+  });
   Future<void> removeEvent(String id);
   Future<void> removeAllEventsByPubKey(String pubKey);
   Future<void> removeAllEvents();
@@ -51,7 +56,7 @@ abstract class CacheManager {
 
   Future<void> saveDmSessionsInfo(DMSessionInfo info);
   Future<void> saveDmSessionsInfos(List<DMSessionInfo> infos);
-  DMSessionInfo? loadDmSessionsInfo(String id);
+  List<DMSessionInfo> loadDmSessionsInfo(String id);
   List<DMSessionInfo?> loadDmSessionsInfos(List<String> ids);
   Future<void> removeDmSessionsInfo(String id);
   Future<void> removeAllDmSessionsInfo();

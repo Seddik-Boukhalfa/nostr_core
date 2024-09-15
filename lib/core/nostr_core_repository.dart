@@ -119,7 +119,7 @@ class NostrCore {
         .toList();
   }
 
-  Future connect(String relay, {bool? fromIdleState}) async {
+  Future<void> connect(String relay, {bool? fromIdleState}) async {
     WebSocket? socket;
 
     if (fromIdleState == null) {
@@ -151,7 +151,7 @@ class NostrCore {
     }
   }
 
-  Future connectRelays(List<String> relays, {bool? fromIdleState}) async {
+  Future<void> connectRelays(List<String> relays, {bool? fromIdleState}) async {
     List<String> toBeStopped = [];
     final nostrConnectRelays = this.relays();
 
@@ -165,7 +165,7 @@ class NostrCore {
       closeConnect(toBeStopped);
     }
 
-    Future.wait(
+    await Future.wait(
       relays.map((e) => connect(e, fromIdleState: fromIdleState)).toList(),
     );
   }
@@ -210,8 +210,9 @@ class NostrCore {
     void Function(String, OKEvent, String, List<String>)? eoseCallBack,
   }) async {
     final completer = Completer<String>();
-    Timer? timer;
+    Timer? timer = Timer(Duration(seconds: timeOut), () {});
     String id = '';
+
     id = addSubscription(
       filters,
       relays,
@@ -628,8 +629,11 @@ class NostrCore {
               contactList.createdAt < loadedContactList!.createdAt)) {
         loadedContactList!.loadedTimestamp =
             DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
         await cacheManager.saveContactList(loadedContactList!);
         contactList = loadedContactList;
+        completer.complete(contactList);
+      } else if (contactList != null) {
         completer.complete(contactList);
       }
     } else {
@@ -732,8 +736,9 @@ class NostrCore {
   //********************************************** Metadata handling ***********************************************************/
   Future<List<Metadata>> loadMissingMetadatas(
     List<String> pubKeys,
-    List<String> relays,
-  ) async {
+    List<String> relays, {
+    Function? onRefresh,
+  }) async {
     List<String> missingPubKeys = [];
 
     for (var pubKey in pubKeys) {
@@ -759,7 +764,9 @@ class NostrCore {
             await cacheManager.saveMetadata(metadatas[event.pubkey]!);
           }
         },
-        eoseCallBack: (p0, p1, p2, p3) {},
+        eoseCallBack: (p0, p1, p2, p3) {
+          onRefresh?.call();
+        },
       );
 
       closeRequests([id]);
@@ -889,15 +896,7 @@ class NostrCore {
         continue;
       }
 
-      bool connectable = await connect(url);
-
-      if (kDebugMode) {
-        print("tried to reconnect to $url = $connectable");
-      }
-
-      if (!connectable) {
-        continue;
-      }
+      await connect(url);
 
       if (bestRelays[url] == null) {
         bestRelays[url] = [];
@@ -1098,10 +1097,14 @@ class NostrCore {
 
   Future<void> loadMissingRelayListsFromNip65OrNip02(
     List<String> pubKeys, {
-    Function(String stepName, int count, int total)? onProgress,
+    Function(
+      String stepName,
+      int count,
+      int total,
+    )? onProgress,
     bool forceRefresh = false,
   }) async {
-    List<String> missingPubKeys = [];
+    Set<String> missingPubKeys = {};
 
     for (var pubKey in pubKeys) {
       UserRelayList? userRelayList = cacheManager.loadUserRelayList(pubKey);
@@ -1125,7 +1128,7 @@ class NostrCore {
       final id = await doQuery(
         [
           Filter(
-            authors: missingPubKeys,
+            authors: missingPubKeys.toList(),
             kinds: [
               EventKind.RELAY_LIST_METADATA,
               EventKind.CONTACT_LIST,

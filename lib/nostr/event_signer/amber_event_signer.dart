@@ -134,11 +134,18 @@ class AmberEventSigner implements EventSigner {
     final sgString = await decrypt44(event.content, event.pubkey);
 
     if (sgString != null) {
-      final sgEvent = Event.fromJson(jsonDecode(sgString));
+      final sgEvent = Event.fromJson(
+        jsonDecode(sgString),
+        currentUser: publicKey,
+      );
+
       final decrypt = await decrypt44(sgEvent.content, sgEvent.pubkey);
 
       if (decrypt != null) {
-        return Event.fromJson(jsonDecode(decrypt));
+        return Event.fromJson(
+          jsonDecode(decrypt),
+          currentUser: publicKey,
+        );
       }
 
       return null;

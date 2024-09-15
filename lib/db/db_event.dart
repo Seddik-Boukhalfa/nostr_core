@@ -41,6 +41,9 @@ class DbEvent extends Event {
   @override
   List<String> get seenOn => super.seenOn;
 
+  @override
+  String get currentUser => super.currentUser;
+
   int? get lastUpdate => super.lastUpdated;
 
   @override
