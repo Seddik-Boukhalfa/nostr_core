@@ -48,7 +48,7 @@ class Nip65 {
   }
 
   Future<Event?> toEvent(EventSigner signer) async {
-    return Event.genEvent(
+    return await Event.genEvent(
       signer: signer,
       kind: EventKind.RELAY_LIST_METADATA,
       tags: relays.entries.map((entry) {

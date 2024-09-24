@@ -77,7 +77,6 @@ class ZapAction {
     bool? removeNostrEvent,
     List<List<String>>? extraTags,
   }) async {
-    // var cancelFunc = BotToast.showLoading();
     try {
       return await _doGenInvoiceCode(
         sats,

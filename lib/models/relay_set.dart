@@ -36,7 +36,21 @@ class RelaySet {
     return "$name,$pubKey";
   }
 
-  static const int MAX_AUTHORS_PER_REQUEST = 100;
+  List<String> outboxRelaysPerUser(String pubkey) {
+    List<String> r = [];
+
+    for (final e in relaysMap.entries) {
+      final hasPubkey =
+          e.value.where((pMap) => pMap.pubKey == pubkey).toList().isNotEmpty;
+      if (hasPubkey) {
+        r.add(e.key);
+      }
+    }
+
+    return r;
+  }
+
+  // static const int MAX_AUTHORS_PER_REQUEST = 100;
 
   // void splitIntoRequests(Filter filter, NostrRequest groupRequest) {
   //   for (var entry in relaysMap.entries) {
@@ -98,13 +112,13 @@ class RelaySet {
   //   }
   // }
 
-  // void addMoreRelays(Map<String, List<PubkeyMapping>> more) {
-  //   more.forEach((key, value) {
-  //     if (!relaysMap.keys.contains(key)) {
-  //       relaysMap[key] = value;
-  //     }
-  //   });
-  // }
+  void addMoreRelays(Map<String, List<PubkeyMapping>> more) {
+    more.forEach((key, value) {
+      if (!relaysMap.keys.contains(key)) {
+        relaysMap[key] = value;
+      }
+    });
+  }
 }
 
 class NotCoveredPubKey {

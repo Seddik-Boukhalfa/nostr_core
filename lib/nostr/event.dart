@@ -81,18 +81,28 @@ class Event {
     return getTags(stTags, "p");
   }
 
-  String? getDtag() {
-    for (var tag in tags) {
-      if (tag.length > 1) {
-        var key = tag[0];
-        var value = tag[1];
+  List<String> get eTags {
+    return getTags(stTags, "e");
+  }
 
-        if (key == "d") {
-          return value;
-        }
+  static List<String> getEtags(List<List<String>> list, String tag) {
+    List<String> tags = [];
+    for (var e in list) {
+      if (e.length > 3 && e[3] == tag) {
+        tags = e;
       }
     }
-    return null;
+    return tags;
+  }
+
+  String? get root {
+    final sTags = getEtags(stTags, "root");
+    return sTags.isEmpty ? null : sTags.first;
+  }
+
+  String? get reply {
+    final sTags = getEtags(stTags, "reply");
+    return sTags.isEmpty ? null : sTags.first;
   }
 
   factory Event.partial({
@@ -235,6 +245,7 @@ class Event {
   }) {
     Map<String, dynamic> json = {};
     String? subscriptionId;
+
     if (input.length == 2) {
       json = input[1] as Map<String, dynamic>;
     } else if (input.length == 3) {
@@ -245,7 +256,7 @@ class Event {
     }
 
     var tags = (json['tags'] as List<dynamic>)
-        .map((e) => (e as List<dynamic>)
+        .map((e) => (e as List)
             .map((e) => e.runtimeType == String ? e as String : '')
             .toList())
         .toList();

@@ -3,9 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:nostr_core/nostr/event.dart';
-import 'package:nostr_core/utils/enums.dart';
-import 'package:nostr_core/utils/helpers.dart';
-import 'package:nostr_core/utils/static_properties.dart';
+import 'package:nostr_core/utils/utils.dart';
 
 class ContactList {
   late String pubkey;
@@ -52,7 +50,12 @@ class ContactList {
           }
         }
         contacts.add(contact);
-        contactRelays.add(relay);
+        final r = Relay.clean(relay);
+
+        if (r != null) {
+          contactRelays.add(r);
+        }
+
         petnames.add(petname);
       } else if (name == "t" && length > 1) {
         var tagName = tag[1];
@@ -85,31 +88,36 @@ class ContactList {
         Map<String, dynamic> json = jsonDecode(event.content);
         if (json.entries.isNotEmpty) {
           for (var entry in json.entries) {
-            try {
-              bool read = entry.value["read"] ?? false;
-              bool write = entry.value["write"] ?? false;
-              if (read || write) {
-                map[entry.key] = ReadWriteMarker.from(read: read, write: write);
-              }
-            } catch (e) {
+            final r = Relay.clean(entry.key);
+
+            if (r != null) {
               try {
-                Map<String, dynamic> decodedValue = jsonDecode(entry.value);
-                bool read = decodedValue["read"] ?? false;
-                bool write = decodedValue["write"] ?? false;
+                bool read = entry.value["read"] ?? false;
+                bool write = entry.value["write"] ?? false;
                 if (read || write) {
                   map[entry.key] =
                       ReadWriteMarker.from(read: read, write: write);
                 }
-                continue;
               } catch (e) {
+                try {
+                  Map<String, dynamic> decodedValue = jsonDecode(entry.value);
+                  bool read = decodedValue["read"] ?? false;
+                  bool write = decodedValue["write"] ?? false;
+                  if (read || write) {
+                    map[entry.key] =
+                        ReadWriteMarker.from(read: read, write: write);
+                  }
+                  continue;
+                } catch (e) {
+                  if (kDebugMode) {
+                    print(
+                        "Could not parse relay ${entry.key} , entry : ${entry.value}");
+                  }
+                }
                 if (kDebugMode) {
                   print(
-                      "Could not parse relay ${entry.key} , entry : ${entry.value}");
+                      "Could not parse relay ${entry.key} , content : ${event.content}");
                 }
-              }
-              if (kDebugMode) {
-                print(
-                    "Could not parse relay ${entry.key} , content : ${event.content}");
               }
             }
           }
@@ -155,6 +163,13 @@ class ContactList {
       content: "",
       createdAt: createdAt,
     );
+  }
+
+  List<List<String>> toAllTags() {
+    return contactsToJson()
+      ..addAll(tagListToJson(followedTags, "t"))
+      ..addAll(tagListToJson(followedCommunities, "a"))
+      ..addAll(tagListToJson(followedEvents, "e"));
   }
 
   @override

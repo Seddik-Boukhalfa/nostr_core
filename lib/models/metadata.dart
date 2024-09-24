@@ -3,8 +3,7 @@
 
 import 'dart:convert';
 
-import 'package:nostr_core/nostr/event.dart';
-import 'package:nostr_core/nostr/event_signer/event_signer.dart';
+import 'package:nostr_core/nostr/nostr.dart';
 import 'package:nostr_core/utils/extensions.dart';
 import 'package:nostr_core/utils/helpers.dart';
 import 'package:nostr_core/utils/static_properties.dart';
@@ -114,7 +113,7 @@ class Metadata {
   }
 
   Future<Event?> toEvent(EventSigner signer) async {
-    return Event.genEvent(
+    return await Event.genEvent(
       signer: signer,
       content: jsonEncode(toJson()),
       kind: EventKind.METADATA,
@@ -126,10 +125,14 @@ class Metadata {
     if (Helpers.isNotBlank(displayName)) {
       return displayName;
     }
+
     if (Helpers.isNotBlank(name)) {
       return name;
     }
-    return pubkey;
+
+    final pub = Nip19.encodePubkey(pubkey);
+
+    return '${pub.substring(1, 7)}...${pub.substring(pub.length - 7, pub.length)}';
   }
 
   bool isMetadataDeleted() {

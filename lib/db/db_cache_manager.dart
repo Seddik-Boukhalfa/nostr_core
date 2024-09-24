@@ -194,6 +194,17 @@ class DbCacheManager extends CacheManager {
   }
 
   /// *********************************************************************************************
+  ///
+  List<Event> loadNoteStats(String id) {
+    final events =
+        isar.dbEvents.where().rootEqualTo(id).or().replyEqualTo(id).findAll();
+
+    return eventFilter != null
+        ? events.where((event) => eventFilter!.filter(event)).toList()
+        : events;
+  }
+
+  /// *********************************************************************************************
 
   @override
   Future<void> removeMetadata(String pubKey) async {
@@ -354,24 +365,46 @@ class DbCacheManager extends CacheManager {
   @override
   List<Event> loadEvents({
     List<String>? pubKeys,
+    List<String>? ids,
     List<int>? kinds,
+    List<String>? eTags,
     String? pTag,
     String? currentUser,
   }) {
-    List<Event> events = isar.dbEvents
+    final events = isar.dbEvents
         .where()
-        .optional(
-          Helpers.isNotBlank(currentUser),
-          (q) => q.currentUserEqualTo(currentUser!),
+        .group(
+          (q) => q
+              .optional(
+                Helpers.isNotBlank(currentUser),
+                (q) => q.currentUserEqualTo(currentUser!),
+              )
+              .and()
+              .optional(
+                eTags?.isNotEmpty ?? false,
+                (q) => q.anyOf(eTags!, (q, e) => q.eTagsElementEqualTo(e)),
+              )
+              .and()
+              .optional(
+                pubKeys?.isNotEmpty ?? false,
+                (q) => q.anyOf(pubKeys!, (q, p) => q.pubkeyEqualTo(p)),
+              )
+              .and()
+              .optional(
+                ids?.isNotEmpty ?? false,
+                (q) => q.anyOf(ids!, (q, id) => q.idEqualTo(id)),
+              )
+              .and()
+              .optional(
+                Helpers.isNotBlank(pTag),
+                (q) => q.pTagsElementEqualTo(pTag!),
+              )
+              .and()
+              .optional(
+                kinds?.isNotEmpty ?? false,
+                (q) => q.anyOf(kinds!, (q, k) => q.kindEqualTo(k)),
+              ),
         )
-        .and()
-        .optional(kinds != null && kinds.isNotEmpty,
-            (q) => q.anyOf(kinds!, (q, kind) => q.kindEqualTo(kind)))
-        .and()
-        .optional(pubKeys != null && pubKeys.isNotEmpty,
-            (q) => q.anyOf(pubKeys!, (q, pubKey) => q.pubkeyEqualTo(pubKey)))
-        .and()
-        .optional(Helpers.isNotBlank(pTag), (q) => q.pTagsElementEqualTo(pTag!))
         .findAll();
 
     return eventFilter != null
@@ -380,22 +413,46 @@ class DbCacheManager extends CacheManager {
   }
 
   @override
-  Event? loadEvent(String id, bool r) {
+  Event? loadEventById(String id, bool r) {
     Event? event;
+
     if (r) {
       final evs = isar.dbEvents.where().dTagEqualTo(id).findAll();
       if (evs.isEmpty) {
         return null;
       }
 
-      return evs.first;
+      event = evs.first;
     } else {
       event = isar.dbEvents.get(id);
     }
 
-    return eventFilter == null || (event != null && eventFilter!.filter(event))
-        ? event
-        : null;
+    return eventFilter == null || eventFilter!.filter(event!) ? event : null;
+  }
+
+  @override
+  Event? loadEvent({String? e, String? pubkey, String? pTag, int? kind}) {
+    Event? event;
+
+    final evs = isar.dbEvents
+        .where()
+        .optional(kind != null, (q) => q.kindEqualTo(kind!))
+        .and()
+        .optional(Helpers.isNotBlank(e), (q) => q.eTagsElementContains(e!))
+        .and()
+        .optional(
+            Helpers.isNotBlank(pTag), (q) => q.pTagsElementContains(pTag!))
+        .and()
+        .optional(Helpers.isNotBlank(pubkey), (q) => q.pubkeyEqualTo(pubkey!))
+        .findAll();
+
+    if (evs.isEmpty) {
+      return null;
+    } else {
+      event = evs.first;
+    }
+
+    return eventFilter == null || eventFilter!.filter(event) ? event : null;
   }
 
   @override

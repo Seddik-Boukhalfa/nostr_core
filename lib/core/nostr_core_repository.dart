@@ -23,10 +23,7 @@ import 'package:nostr_core/nostr/nips/nip_020.dart';
 import 'package:nostr_core/nostr/nips/nip_065.dart';
 import 'package:nostr_core/nostr/request.dart';
 import 'package:nostr_core/nostr/utils.dart';
-import 'package:nostr_core/utils/enums.dart';
-import 'package:nostr_core/utils/helpers.dart';
-import 'package:nostr_core/utils/relay.dart';
-import 'package:nostr_core/utils/static_properties.dart';
+import 'package:nostr_core/utils/utils.dart';
 import 'package:uuid/uuid.dart';
 
 const Duration REFRESH_CONTACT_LIST_DURATION = Duration(minutes: 10);
@@ -68,6 +65,8 @@ class NostrCore {
 
   Map<String, Sends> sendsMap = {};
 
+  Map<String, int> attempts = {};
+
   List<ConnectStatusCallBack> connectStatusListeners = [];
 
   NostrCore({required this.cacheManager});
@@ -76,10 +75,21 @@ class NostrCore {
   @pragma('vm:entry-point')
   void relaysAutoReconnect() {
     for (final webSocketKey in webSockets.keys) {
-      if (webSockets[webSocketKey] == null) {
+      if (webSockets[webSocketKey] == null &&
+          (attempts[webSocketKey] == null || attempts[webSocketKey]! <= 3)) {
         connect(webSocketKey);
       }
     }
+  }
+
+  void forceReconnect() {
+    final nostrConnectRelays = List<String>.from(relays());
+
+    closeConnect(nostrConnectRelays);
+
+    Future.wait(
+      nostrConnectRelays.map((e) => connect(e)).toList(),
+    );
   }
 
   void _setConnectStatus(String relay, int status) {
@@ -119,60 +129,92 @@ class NostrCore {
         .toList();
   }
 
-  Future<void> connect(String relay, {bool? fromIdleState}) async {
+  List<String> currentUserActiveRelays(List<String> rs) {
+    final keys = webSockets.keys
+        .where(
+          (key) => rs.contains(key) && webSockets[key] != null,
+        )
+        .toList();
+
+    return keys.map((e) => Relay.clean(e)!).toList();
+  }
+
+  Future<void> connect(String r, {bool? fromIdleState}) async {
     WebSocket? socket;
 
-    if (fromIdleState == null) {
-      if ((connectStatus[relay] == 0 && webSockets[relay] != null) ||
-          connectStatus[relay] == 1 && webSockets[relay] != null) return;
+    getRelayInfo(r);
 
-      if (webSockets.containsKey(relay) && webSockets[relay] != null) {
-        socket = webSockets[relay]!;
-        _setConnectStatus(relay, socket.readyState);
-        printLog('status =  ${connectStatus[relay]}');
-        if (connectStatus[relay] != 3) {
+    if (fromIdleState == null) {
+      if ((connectStatus[r] == 0 && webSockets[r] != null) ||
+          connectStatus[r] == 1 && webSockets[r] != null) return;
+
+      if (webSockets.containsKey(r) && webSockets[r] != null) {
+        socket = webSockets[r]!;
+        _setConnectStatus(r, socket.readyState);
+        printLog('status =  ${connectStatus[r]}');
+        if (connectStatus[r] != 3) {
           return;
         }
       }
     }
 
-    closedRelays.remove(relay);
-    webSockets[relay] = null;
-    socket = await _connectWs(relay);
+    attempts[r] = (attempts[r] ?? 0) + 1;
+    closedRelays.remove(r);
+    webSockets[r] = null;
+    socket = await _connectWs(r);
 
     if (socket != null) {
-      socket.done.then((dynamic _) => _onDisconnected(relay));
-      _listenEvent(socket, relay);
-      webSockets[relay] = socket;
-      printLog('$relay socket connection initialized');
-      _setConnectStatus(relay, 1);
+      socket.done.then((dynamic _) => _onDisconnected(r));
+      _listenEvent(socket, r);
+      webSockets[r] = socket;
+      printLog('$r socket connection initialized');
+      _setConnectStatus(r, 1);
     } else {
-      webSockets[relay] = socket;
+      webSockets[r] = socket;
     }
   }
 
   Future<void> connectRelays(List<String> relays, {bool? fromIdleState}) async {
-    List<String> toBeStopped = [];
-    final nostrConnectRelays = this.relays();
+    // List<String> toBeStopped = [];
+    // final nostrConnectRelays = this.relays();
 
-    for (final relay in nostrConnectRelays) {
-      if (!relays.contains(relay)) {
-        toBeStopped.add(relay);
-      }
-    }
+    // for (final relay in nostrConnectRelays) {
+    //   if (!relays.contains(relay)) {
+    //     toBeStopped.add(relay);
+    //   }
+    // }
 
-    if (toBeStopped.isNotEmpty) {
-      closeConnect(toBeStopped);
-    }
+    // if (toBeStopped.isNotEmpty) {
+    //   closeConnect(toBeStopped);
+    // }
+
+    final rs = relays.where((r) {
+      final relay = Relay.clean(r);
+      return relay != null && !this.relays().contains(relay);
+    }).toList();
 
     await Future.wait(
-      relays.map((e) => connect(e, fromIdleState: fromIdleState)).toList(),
+      rs.map((e) => connect(e)).toList(),
+    );
+  }
+
+  Future<void> connectNonConnectedRelays(Set<String> relays) async {
+    final rs = relays.where((r) {
+      final relay = Relay.clean(r);
+      return relay != null &&
+          !this.relays().contains(relay) &&
+          (webSockets[relay] == null || connectStatus[relay] != 1);
+    }).toList();
+
+    await Future.wait(
+      rs.map((e) => connect(e)).toList(),
     );
   }
 
   Future closeConnect(List<String> relays) async {
     for (final relay in relays) {
       if (webSockets.containsKey(relay)) {
+        attempts.remove(relay);
         closedRelays.add(relay);
         final socket = webSockets.remove(relay);
         await socket?.close();
@@ -423,11 +465,13 @@ class NostrCore {
         }
       }
     } else {
-      webSockets.forEach((url, socket) {
-        if (connectStatus[url] == 1 && socket != null) {
-          socket.add(data);
-        }
-      });
+      webSockets.forEach(
+        (url, socket) {
+          if (connectStatus[url] == 1 && socket != null) {
+            socket.add(data);
+          }
+        },
+      );
     }
   }
 
@@ -435,6 +479,7 @@ class NostrCore {
   void _handleMessage(String message, String relay) {
     try {
       var m = Message.deserialize(message);
+
       switch (m.type) {
         case 'EVENT':
           _handleEvent(m.message, relay);
@@ -452,7 +497,7 @@ class NostrCore {
           printLog('Received message not supported: $message');
           break;
       }
-    } catch (_) {
+    } catch (e) {
       printLog('Received message not supported: $message');
     }
   }
@@ -553,7 +598,7 @@ class NostrCore {
 
   //************************************************ Relays info **************************************************************/
   Future<RelayInfo?> getRelayInfo(String url) async {
-    if (relayInfos[url] != null) {
+    if (relayInfos[url] == null) {
       final info = await RelayInfo.get(url);
 
       if (info != null) {
@@ -561,8 +606,9 @@ class NostrCore {
       }
 
       return relayInfos[url];
+    } else {
+      return relayInfos[url];
     }
-    return null;
   }
 
   //********************************************** Contacts lists **************************************************************/
@@ -649,7 +695,7 @@ class NostrCore {
     EventSigner signer,
   ) async {
     ContactList? contactList = await ensureUpToDateContactListOrEmpty(signer);
-    toRemove.removeWhere((element) => contactList.contacts.contains(element));
+    toRemove.removeWhere((element) => !contactList.contacts.contains(element));
 
     if (toRemove.isNotEmpty) {
       for (final p in toRemove) {
@@ -658,7 +704,18 @@ class NostrCore {
         contactList.createdAt = Helpers.now;
       }
 
-      final isSuccessful = await publish(contactList.toEvent(), relays);
+      final e = await Event.genEvent(
+        kind: EventKind.CONTACT_LIST,
+        tags: contactList.toAllTags(),
+        content: "",
+        signer: signer,
+      );
+
+      if (e == null) {
+        return null;
+      }
+
+      final isSuccessful = await publish(e, relays);
 
       if (isSuccessful) {
         await cacheManager.saveContactList(contactList);
@@ -686,7 +743,18 @@ class NostrCore {
         }
       }
 
-      final isSuccessful = await publish(contactList.toEvent(), relays);
+      final e = await Event.genEvent(
+        kind: EventKind.CONTACT_LIST,
+        tags: contactList.toAllTags(),
+        content: "",
+        signer: signer,
+      );
+
+      if (e == null) {
+        return null;
+      }
+
+      final isSuccessful = await publish(e, relays);
 
       if (isSuccessful) {
         await cacheManager.saveContactList(contactList);
@@ -718,8 +786,19 @@ class NostrCore {
         }
       }
 
+      final e = await Event.genEvent(
+        kind: EventKind.CONTACT_LIST,
+        tags: contactList.toAllTags(),
+        content: "",
+        signer: signer,
+      );
+
+      if (e == null) {
+        return null;
+      }
+
       final isSuccessful = await publish(
-        contactList.toEvent(),
+        e,
         relays,
       );
 
@@ -878,8 +957,12 @@ class NostrCore {
       if (kDebugMode) {
         print("Calculating best relays...");
       }
-      onProgress.call("Calculating best relays",
-          minimumRelaysCoverageByPubkey.length, pubKeysByRelayUrl.length);
+
+      onProgress.call(
+        "Calculating best relays",
+        minimumRelaysCoverageByPubkey.length,
+        pubKeysByRelayUrl.length,
+      );
     }
 
     Map<String, int> notCoveredPubkeys = {};
@@ -1202,6 +1285,108 @@ class NostrCore {
       }
     }
   }
+
+// //********************************************** Nip 51 lists *************************************************************/\
+//   Future<Nip51List?> getCachedNip51List(
+//     int kind,
+//   ) async {
+//     List<Event>? events = cacheManager.loadEvents(
+//       pubKeys: [signer.getPublicKey()],
+//       kinds: [kind],
+//     );
+
+//     events.sort(
+//       (a, b) => b.createdAt.compareTo(a.createdAt),
+//     );
+//     return events.isNotEmpty
+//         ? await Nip51List.fromEvent(events.first, signer)
+//         : null;
+//   }
+
+//   Future<Nip51List?> getSingleNip51List(
+//     int kind,
+//     EventSigner signer,
+//     List<String> relays, {
+//     String? dTag,
+//     bool forceRefresh = false,
+//     int timeout = 5,
+//   }) async {
+//     Nip51List? list =
+//         !forceRefresh ? await getCachedNip51List(kind, signer) : null;
+//     if (list == null) {
+//       Nip51List? refreshedList;
+
+//       await doQuery(
+//         [
+//           Filter(
+//             authors: [signer.getPublicKey()],
+//             kinds: [kind],
+//           ),
+//         ],
+//         relays,
+//         eventCallBack: (event, relay) async {
+//           switch (event.kind) {
+//             case EventKind.RELAY_LIST_METADATA:
+//               if (refreshedList == null ||
+//                   refreshedList!.createdAt <= event.createdAt) {
+//                 refreshedList = await Nip51List.fromEvent(event, signer);
+
+//                 await cacheManager.saveEvent(event);
+//               }
+//           }
+//         },
+//       );
+
+//       return refreshedList;
+//     }
+
+//     return list;
+//   }
+// }
+
+// Future<List<Nip51List>> getNip51List(
+//   List<int> kinds,
+//   List<String> relays, {
+//   String? dTag,
+//   bool forceRefresh = false,
+//   int timeout = 5,
+// }) async {
+//   List<Nip51List> lists = [];
+
+//   for (final kind in kinds) {
+//     Nip51List? list =
+//         !forceRefresh ? await getCachedNip51List(kind, signer) : null;
+//   }
+
+//   if (list == null) {
+//     Nip51List? refreshedList;
+
+//     await doQuery(
+//       [
+//         Filter(
+//           authors: [signer.getPublicKey()],
+//           kinds: [kind],
+//         ),
+//       ],
+//       relays,
+//       eventCallBack: (event, relay) async {
+//         switch (event.kind) {
+//           case EventKind.RELAY_LIST_METADATA:
+//             if (refreshedList == null ||
+//                 refreshedList!.createdAt <= event.createdAt) {
+//               refreshedList = await Nip51List.fromEvent(event, signer);
+
+//               await cacheManager.saveEvent(event);
+//             }
+//         }
+//       },
+//     );
+
+//     return refreshedList;
+//   }
+
+//   return list;
+// }
 }
 
 typedef NoticeCallBack = void Function(String notice, String relay);

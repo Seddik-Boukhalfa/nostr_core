@@ -84,6 +84,57 @@ class DbEvent extends Event {
     return pTags;
   }
 
+  @override
+  List<String> get eTags {
+    List<String> eTags = super.stTags.where((element) {
+      List<dynamic> a = element;
+      if (a.isNotEmpty && a.first.toString() == "e") {
+        return true;
+      }
+
+      return false;
+    }).map((e) {
+      List<dynamic> list = e;
+      return list.length >= 2 ? list[1].toString() : "";
+    }).toList();
+
+    return eTags;
+  }
+
+  @override
+  String? get root {
+    List<String> roots = super.stTags.where((element) {
+      List<String> a = element;
+      if (a.isNotEmpty && a.first.toString() == "e") {
+        return true;
+      }
+
+      return false;
+    }).map((e) {
+      List<String> list = e;
+      return list.length > 3 && list[3] == 'root' ? list[1].toString() : "";
+    }).toList();
+
+    return roots.isEmpty ? null : roots.first;
+  }
+
+  @override
+  String? get reply {
+    List<String> replies = super.stTags.where((element) {
+      List<String> a = element;
+      if (a.isNotEmpty && a.first.toString() == "e") {
+        return true;
+      }
+
+      return false;
+    }).map((e) {
+      List<String> list = e;
+      return list.length > 3 && list[3] == 'reply' ? list[1].toString() : "";
+    }).toList();
+
+    return replies.isEmpty ? null : replies.first;
+  }
+
   static DbEvent fromEvent(Event event) {
     DbEvent dbEvent = DbEvent(
       event.id,

@@ -1,225 +1,316 @@
-// ignore_for_file: public_member_api_docs, sort_constructors_first
+// ignore_for_file: constant_identifier_names
+
 import 'dart:convert';
 
-import 'package:bip340/bip340.dart' as bip340;
-import 'package:nostr_core/nostr/event.dart';
-import 'package:nostr_core/nostr/utils.dart';
+import 'package:flutter/foundation.dart';
+import 'package:nostr_core/nostr/nostr.dart';
+import 'package:nostr_core/utils/utils.dart';
 
-/// Lists
-class Nip51 {
-  static List<List<String>> peoplesToTags(List<People> items) {
-    List<List<String>> result = [];
-    for (People item in items) {
-      result.add(
-        [
-          'p',
-          item.pubkey,
-          item.mainRelay ?? '',
-          item.petName ?? '',
-          item.aliasPubKey ?? '',
-        ],
-      );
-    }
-    return result;
+class Nip51List {
+  static const int MUTE = 10000;
+  static const int PIN = 10001;
+  static const int BOOKMARKS = 10003;
+  static const int COMMUNITIES = 10004;
+  static const int PUBLIC_CHATS = 10005;
+  static const int BLOCKED_RELAYS = 10006;
+  static const int SEARCH_RELAYS = 10007;
+  static const int INTERESTS = 10015;
+  static const int EMOJIS = 10030;
+
+  static const int FOLLOW_SET = 30000;
+  static const int RELAY_SET = 30002;
+  static const int BOOKMARKS_SET = 30003;
+  static const int CURATION_SET = 30004;
+  static const int INTERESTS_SET = 30015;
+  static const int EMOJIS_SET = 30030;
+
+  static const String RELAY = "relay";
+  static const String PUB_KEY = "p";
+  static const String HASHTAG = "t";
+  static const String WORD = "word";
+  static const String THREAD = "e";
+  static const String RESOURCE = "r";
+  static const String EMOJI = "emoji";
+  static const String A = "a";
+
+  static const List<String> POSSIBLE_TAGS = [
+    RELAY,
+    PUB_KEY,
+    HASHTAG,
+    WORD,
+    THREAD,
+    RESOURCE,
+    EMOJI,
+    A
+  ];
+
+  late String id;
+  late String pubkey;
+  late int kind;
+
+  List<Nip51ListElement> elements = [];
+
+  List<Nip51ListElement> byTag(String tag) =>
+      elements.where((element) => element.tag == tag).toList();
+
+  List<Nip51ListElement> get relays => byTag(RELAY);
+  List<Nip51ListElement> get pubKeys => byTag(PUB_KEY);
+  List<Nip51ListElement> get hashtags => byTag(HASHTAG);
+  List<Nip51ListElement> get words => byTag(WORD);
+  List<Nip51ListElement> get threads => byTag(THREAD);
+
+  List<String> get publicRelays =>
+      relays.where((element) => !element.private).map((e) => e.value).toList();
+  List<String> get privateRelays =>
+      relays.where((element) => !element.private).map((e) => e.value).toList();
+
+  set privateRelays(List<String> list) {
+    elements.removeWhere((element) => element.tag == RELAY && element.private);
+    elements.addAll(list
+        .map((url) => Nip51ListElement(tag: RELAY, value: url, private: true)));
   }
 
-  static List<List<String>> bookmarksToTags(List<String> items) {
-    List<List<String>> result = [];
-    for (String item in items) {
-      result.add(['e', item]);
-    }
-    return result;
+  set publicRelays(List<String> list) {
+    elements.removeWhere((element) => element.tag == RELAY && !element.private);
+    elements.addAll(list.map(
+        (url) => Nip51ListElement(tag: RELAY, value: url, private: false)));
   }
 
-  static String peoplesToContent(
-    List<People> items,
-    String privkey,
-    String pubkey,
-  ) {
-    var list = [];
-    for (People item in items) {
-      list.add([
-        'p',
-        item.pubkey,
-        item.mainRelay ?? '',
-        item.petName ?? '',
-        item.aliasPubKey ?? '',
-      ]);
-    }
+  late int createdAt;
 
-    String content = jsonEncode(list);
-    return encrypt(privkey, '02$pubkey', content);
+  @override
+  // coverage:ignore-start
+  String toString() {
+    return 'Nip51List { $kind}';
   }
 
-  static String bookmarksToContent(
-    List<String> items,
-    String privkey,
-    String pubkey,
-  ) {
-    var list = [];
-    for (String item in items) {
-      list.add(['e', item]);
+  String get displayTitle {
+    if (kind == Nip51List.SEARCH_RELAYS) {
+      return "Search";
     }
-    String content = jsonEncode(list);
-    return encrypt(privkey, '02$pubkey', content);
+    if (kind == Nip51List.BLOCKED_RELAYS) {
+      return "Blocked";
+    }
+    if (kind == Nip51List.MUTE) {
+      return "Mute";
+    }
+    if (kind == Nip51List.CURATION_SET) {
+      return "Curation";
+    }
+    if (kind == Nip51List.BOOKMARKS_SET) {
+      return "Bookmark";
+    }
+    return "kind $kind";
   }
 
-  static Map<String, List>? fromContent(
-    String content,
-    String privkey,
-    String pubkey,
-  ) {
-    List<People> people = [];
-    List<String> bookmarks = [];
-    int ivIndex = content.indexOf('?iv=');
-    if (ivIndex <= 0) {
+  List<String> get allRelays => relays.map((e) => e.value).toList();
+
+  Nip51List(
+      {required this.pubkey,
+      required this.kind,
+      required this.createdAt,
+      required this.elements});
+
+  static Future<Nip51List> fromEvent(Event event, EventSigner? signer) async {
+    // }
+    Nip51List list = Nip51List(
+      pubkey: event.pubkey,
+      kind: event.kind,
+      createdAt: event.createdAt,
+      elements: [],
+    );
+
+    list.id = event.id;
+
+    list.parseTags(event.tags, private: false);
+
+    if (Helpers.isNotBlank(event.content) &&
+        signer != null &&
+        signer.canSign()) {
+      try {
+        var json = await signer.decrypt04(event.content, signer.getPublicKey());
+        List<dynamic> tags = jsonDecode(json ?? '');
+        list.parseTags(tags, private: true);
+      } catch (e) {
+        if (kDebugMode) {
+          print(e);
+        }
+      }
+    }
+    return list;
+  }
+
+  void parseTags(List tags, {required bool private}) {
+    for (var tag in tags) {
+      if (tag is! List<dynamic>) continue;
+      final length = tag.length;
+      if (length <= 1) continue;
+      final tagName = tag[0];
+      final value = tag[1];
+      if (POSSIBLE_TAGS.contains(tagName)) {
+        elements.add(
+            Nip51ListElement(tag: tagName, value: value, private: private));
+      }
+    }
+  }
+
+  Future<Event> toEvent(EventSigner? signer) async {
+    String content = "";
+    List<Nip51ListElement> privateElements =
+        elements.where((element) => element.private).toList();
+    if (privateElements.isNotEmpty && signer != null) {
+      String json = jsonEncode(privateElements
+          .map((element) => [element.tag, element.value])
+          .toList());
+      content = await signer.encrypt04(json, signer.getPublicKey()) ?? '';
+    }
+    Event event = Event.partial(
+      pubkey: pubkey,
+      kind: kind,
+      tags: elements
+          .where((element) => !element.private)
+          .map((element) => [element.tag, element.value])
+          .toList(),
+      content: content,
+      createdAt: createdAt,
+    );
+    return event;
+  }
+
+  void addRelay(String relayUrl, bool private) {
+    elements
+        .add(Nip51ListElement(tag: RELAY, value: relayUrl, private: private));
+  }
+
+  void addElement(String tag, String value, bool private) {
+    elements.add(Nip51ListElement(tag: tag, value: value, private: private));
+  }
+
+  void removeRelay(String relayUrl) {
+    elements.removeWhere(
+        (element) => element.tag == RELAY && element.value == relayUrl);
+  }
+
+  void removeElement(String tag, String value) {
+    elements
+        .removeWhere((element) => element.tag == tag && element.value == value);
+  }
+}
+
+class Nip51ListElement {
+  bool private;
+  String tag;
+  String value;
+
+  Nip51ListElement({
+    required this.tag,
+    required this.value,
+    required this.private,
+  });
+}
+
+class Nip51Set extends Nip51List {
+  late String name;
+  String? title;
+  String? description;
+  String? image;
+
+  @override
+  // coverage:ignore-start
+  String toString() {
+    return 'Nip51Set { $name}';
+  }
+
+  Nip51Set(
+      {required String pubKey,
+      required this.name,
+      required int createdAt,
+      required List<Nip51ListElement> elements,
+      this.title})
+      : super(
+            pubkey: pubKey,
+            kind: Nip51List.RELAY_SET,
+            elements: elements,
+            createdAt: createdAt);
+
+  static Future<Nip51Set?> fromEvent(
+    Event event,
+    EventSigner? signer,
+  ) async {
+    String? name = event.dTag;
+    if (name == null || event.kind != Nip51List.RELAY_SET) {
       return null;
     }
-    String iv = content.substring(ivIndex + '?iv='.length, content.length);
-    String encString = content.substring(0, ivIndex);
-    String deContent = decrypt(privkey, '02$pubkey', encString, iv);
-    for (List tag in jsonDecode(deContent)) {
-      if (tag[0] == 'p') {
-        people.add(People(tag[1], tag.length > 2 ? tag[2] : '',
-            tag.length > 3 ? tag[3] : '', tag.length > 4 ? tag[4] : ''));
-      } else if (tag[0] == 'e') {
-        // bookmark
-        bookmarks.add(tag[1]);
+    Nip51Set set = Nip51Set(
+      pubKey: event.pubkey,
+      name: name,
+      createdAt: event.createdAt,
+      elements: [],
+    );
+
+    set.id = event.id;
+
+    if (Helpers.isNotBlank(event.content) &&
+        signer != null &&
+        signer.canSign()) {
+      try {
+        var json = await signer.decrypt04(event.content, signer.getPublicKey());
+        List<dynamic> tags = jsonDecode(json ?? '');
+        set.parseTags(tags, private: true);
+        set.parseSetTags(tags);
+      } catch (e) {
+        set.name = "<invalid encrypted content>";
+        if (kDebugMode) {
+          print(e);
+        }
       }
+    } else {
+      set.parseTags(event.tags, private: false);
+      set.parseSetTags(event.tags);
     }
-    return {'people': people, 'bookmarks': bookmarks};
+    return set;
   }
 
-  // static Future<Event?> createMutePeople(
-  //   List<People> items,
-  //   List<People> encryptedItems,
-  //   String privkey,
-  //   EventSigner? signer,
-  // ) async {
-  //   return Event.genEvent(
-  //     kind: 10000,
-  //     tags: peoplesToTags(items),
-  //     content: peoplesToContent(encryptedItems, privkey, pubkey),
-  //     signer: signer,
-  //   );
-  // }
-
-  // static createPinEvent(List<String> items, List<String> encryptedItems,
-  //     String privkey, String pubkey) {
-  //   return Event.from(
-  //       kind: 10001,
-  //       tags: bookmarksToTags(items),
-  //       content: bookmarksToContent(encryptedItems, privkey, pubkey),
-  //       privkey: privkey);
-  // }
-
-  // static Event createCategorizedPeople(String identifier, List<People> items,
-  //     List<People> encryptedItems, String privkey, String pubkey) {
-  //   List<List<String>> tags = peoplesToTags(items);
-  //   tags.add(['d', identifier]);
-  //   return Event.from(
-  //       kind: 30000,
-  //       tags: tags,
-  //       content: peoplesToContent(encryptedItems, privkey, pubkey),
-  //       privkey: privkey);
-  // }
-
-  // static createCategorizedBookmarks(String identifier, List<String> items,
-  //     List<String> encryptedItems, String privkey, String pubkey) {
-  //   List<List<String>> tags = bookmarksToTags(items);
-  //   tags.add(['d', identifier]);
-  //   return Event.from(
-  //     kind: 30001,
-  //     tags: tags,
-  //     content: bookmarksToContent(encryptedItems, privkey, pubkey),
-  //     privkey: privkey,
-  //   );
-  // }
-
-  static Lists getLists(Event event, String privkey) {
-    if (event.kind != 10000 &&
-        event.kind != 10001 &&
-        event.kind != 30000 &&
-        event.kind != 30001) {
-      throw Exception('${event.kind} is not nip51 compatible');
+  @override
+  Future<Event> toEvent(EventSigner? signer) async {
+    Event event = await super.toEvent(signer);
+    List<dynamic> tags = [
+      ["d", name]
+    ];
+    if (Helpers.isNotBlank(image)) {
+      tags.add(["description", description]);
     }
-
-    String identifier = '';
-    List<People> people = [];
-    List<String> bookmarks = [];
-    for (List tag in event.stTags) {
-      if (tag[0] == 'p') {
-        people.add(People(tag[1], tag.length > 2 ? tag[2] : '',
-            tag.length > 3 ? tag[3] : '', tag.length > 4 ? tag[4] : ''));
-      }
-      if (tag[0] == 'e') {
-        bookmarks.add(tag[1]);
-      }
-      if (tag[0] == 'd') identifier = tag[1];
+    if (Helpers.isNotBlank(image)) {
+      tags.add(["image", image]);
     }
-    String pubkey = bip340.getPublicKey(privkey);
-    Map? content = Nip51.fromContent(event.content, privkey, pubkey);
-    if (content != null) {
-      people.addAll(content['people']);
-      bookmarks.addAll(content['bookmarks']);
-    }
-    if (event.kind == 10000) identifier = 'Mute';
-    if (event.kind == 10001) identifier = 'Pin';
-
-    return Lists(event.pubkey, identifier, people, bookmarks, event.createdAt);
+    tags.addAll(event.tags);
+    event.tags = tags;
+    return event;
   }
 
-  // static Curation encodeCuration(
-  //   Curation curation,
-  //   String pubKey,
-  //   String privKey,
-  // ) {
-  //   String identifier = '';
-  //   String title = '';
-  //   String excerpt = '';
-  //   String image = '';
-  //   List<EventCoordinates> eventsIds = [];
-
-  //   for (List<String> tag in event.tags) {
-  //     if (tag.first == 'd' && identifier.isEmpty) {
-  //       identifier = tag[1];
-  //     } else if (tag.first == 'title') {
-  //       title = tag[1];
-  //     } else if (tag.first == 'excerpt') {
-  //       excerpt = tag[1];
-  //     } else if (tag.first == 'image') {
-  //       image = tag[1];
-  //     } else if (tag.first == 'a') {
-  //       eventsIds.add(Nip33.getEventCoordinates(tag));
-  //     }
-  //   }
-
-  //   return Event();
-  // }
-}
-
-class People {
-  String pubkey;
-  String? mainRelay;
-  String? petName;
-  String? aliasPubKey;
-
-  /// Default constructor
-  People(this.pubkey, this.mainRelay, this.petName, this.aliasPubKey);
-}
-
-class Lists {
-  String owner;
-
-  String identifier;
-
-  List<People> people;
-
-  List<String> bookmarks;
-
-  int createTime;
-
-  /// Default constructor
-  Lists(this.owner, this.identifier, this.people, this.bookmarks,
-      this.createTime);
+  void parseSetTags(List tags) {
+    for (var tag in tags) {
+      if (tag is! List<dynamic>) continue;
+      final length = tag.length;
+      if (length <= 1) continue;
+      final tagName = tag[0];
+      final value = tag[1];
+      if (tagName == "d") {
+        name = value;
+        continue;
+      }
+      if (tagName == "title") {
+        title = value;
+        continue;
+      }
+      if (tagName == "description") {
+        description = value;
+        continue;
+      }
+      if (tagName == "image") {
+        image = value;
+        continue;
+      }
+    }
+  }
 }

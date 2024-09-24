@@ -9,9 +9,12 @@ import 'package:nostr_core/nostr/event.dart';
 abstract class CacheManager {
   Future<void> saveEvent(Event event);
   Future<void> saveEvents(List<Event> events);
-  Event? loadEvent(String id, bool r);
+  Event? loadEventById(String id, bool r);
+  Event? loadEvent({String? e, String? pubkey, String? pTag, int? kind});
   List<Event> loadEvents({
     List<String> pubKeys,
+    List<String>? ids,
+    List<String>? eTags,
     List<int> kinds,
     String? pTag,
     String? currentUser,

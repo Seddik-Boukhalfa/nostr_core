@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class RelayInfo {
-
   final String name;
 
   final String description;
@@ -27,36 +26,61 @@ class RelayInfo {
   /// Relay software version identifier
   final String version;
 
-  RelayInfo._(this.name, this.description, this.pubKey, this.contact, this.nips,
-      this.software, this.version, this.icon);
+  final String url;
 
-  factory RelayInfo.fromJson(Map<dynamic, dynamic> json, String url) {
+  RelayInfo._(
+    this.url,
+    this.name,
+    this.description,
+    this.pubKey,
+    this.contact,
+    this.nips,
+    this.software,
+    this.version,
+    this.icon,
+  );
+
+  factory RelayInfo.fromJson(
+      Map<dynamic, dynamic> json, String uri, String url) {
     final String name = json["name"] ?? '';
     final String description = json["description"] ?? "";
     final String pubKey = json["pubkey"] ?? "";
     final String contact = json["contact"] ?? "";
     String icon;
-    if (json["icon"]!=null) {
+    if (json["icon"] != null) {
       icon = json["icon"];
     } else {
-      icon = "$url${url.endsWith("/")?"":"/"}favicon.ico";
+      icon = "$uri${uri.endsWith("/") ? "" : "/"}favicon.ico";
     }
     final List<dynamic> nips = json["supported_nips"] ?? [];
     final String software = json["software"] ?? "";
     final String version = json["version"] ?? "";
     return RelayInfo._(
-        name, description, pubKey, contact, nips, software, version, icon);
+      url,
+      name,
+      description,
+      pubKey,
+      contact,
+      nips,
+      software,
+      version,
+      icon,
+    );
   }
 
   static Future<RelayInfo?> get(String url) async {
     Uri uri = Uri.parse(url).replace(scheme: 'https');
+
     try {
-      final response = await http.get(uri,
+      final response = await http.get(
+        uri,
         headers: {'Accept': 'application/nostr+json'},
       );
-      final decodedResponse = jsonDecode(
-          utf8.decode(response.bodyBytes)) as Map;
-      return RelayInfo.fromJson(decodedResponse, uri.toString());
+
+      final decodedResponse =
+          jsonDecode(utf8.decode(response.bodyBytes)) as Map;
+
+      return RelayInfo.fromJson(decodedResponse, uri.toString(), url);
     } catch (e) {
       if (kDebugMode) {
         print(e);

@@ -12,7 +12,7 @@ class Relay {
       adr = Uri.decodeComponent(adr);
     }
     adr = adr.trim();
-    if (!adr.contains(RELAY_URL_REGEX)) {
+    if (!RELAY_URL_REGEX.hasMatch(adr)) {
       return null;
     }
     return adr;
