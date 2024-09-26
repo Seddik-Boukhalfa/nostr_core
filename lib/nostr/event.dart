@@ -106,20 +106,20 @@ class Event {
   }
 
   factory Event.partial({
-    id = '',
-    pubkey = '',
-    createdAt = 0,
-    kind = 1,
+    String id = '',
+    String pubkey = '',
+    int createdAt = 0,
+    int kind = 1,
     tags = const <List<String>>[],
-    content = '',
-    sig = '',
-    currentUser = '',
+    String content = '',
+    String sig = '',
+    String currentUser = '',
     seenOn = const <String>[],
     subscriptionId,
     bool verify = false,
   }) {
     return Event(
-      id,
+      id.isEmpty ? _processEventId(pubkey, createdAt, kind, tags, content) : id,
       pubkey,
       createdAt,
       kind,

@@ -160,6 +160,7 @@ class AmberEventSigner implements EventSigner {
     String? id,
   }) async {
     final encrypt = await encrypt44(jsonEncode(event.toJson()), destPubKey);
+
     if (encrypt != null) {
       final npub = publicKey.startsWith('npub')
           ? publicKey
@@ -174,7 +175,7 @@ class AmberEventSigner implements EventSigner {
 
       await sign(ev);
 
-      final sgString = await encrypt44(jsonEncode(event.toJson()), destPubKey);
+      final sgString = await encrypt44(jsonEncode(ev.toJson()), destPubKey);
 
       if (sgString != null) {
         final keys = Keychain.generate();

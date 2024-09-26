@@ -2,7 +2,6 @@ import 'dart:convert';
 
 import 'package:bip340/bip340.dart' as bip340;
 import 'package:nostr_core/nostr/event.dart';
-import 'package:nostr_core/nostr/event_signer/bip340.dart';
 import 'package:nostr_core/nostr/event_signer/bip340_event_signer.dart';
 import 'package:nostr_core/nostr/event_signer/event_signer.dart';
 import 'package:nostr_core/nostr/event_signer/keychain.dart';
@@ -36,14 +35,13 @@ class Nip59 {
     if (kind != null) tags.add(['k', kind]);
     if (expiration != null) tags.add(['expiration', '$expiration']);
 
-    return Event.partial(
-      pubkey: myPubkey,
+    return (await Event.genEvent(
       kind: EventKind.GIFT_WRAP,
       tags: tags,
       content: content,
       createdAt: createAt ?? 0,
-      sig: Bip340.sign(event.id, sealedPrivkey),
-    );
+      signer: Bip340EventSigner(keychain.private, keychain.public),
+    ))!;
   }
 
   static Future<Event> decode(

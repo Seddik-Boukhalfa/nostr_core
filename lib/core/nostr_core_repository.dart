@@ -82,12 +82,12 @@ class NostrCore {
     }
   }
 
-  void forceReconnect() {
+  void forceReconnect() async {
     final nostrConnectRelays = List<String>.from(relays());
 
-    closeConnect(nostrConnectRelays);
+    await closeConnect(nostrConnectRelays);
 
-    Future.wait(
+    await Future.wait(
       nostrConnectRelays.map((e) => connect(e)).toList(),
     );
   }
