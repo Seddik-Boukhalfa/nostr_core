@@ -1,5 +1,6 @@
 import 'package:nostr_core/models/contact_list.dart';
 import 'package:nostr_core/models/dm_session_info.dart';
+import 'package:nostr_core/models/event_stats.dart';
 import 'package:nostr_core/models/metadata.dart';
 import 'package:nostr_core/models/nip05.dart';
 import 'package:nostr_core/models/relay_set.dart';
@@ -19,6 +20,7 @@ abstract class CacheManager {
     String? pTag,
     String? currentUser,
   });
+
   Future<void> removeEvent(String id);
   Future<void> removeAllEventsByPubKey(String pubKey);
   Future<void> removeAllEvents();
@@ -63,6 +65,13 @@ abstract class CacheManager {
   List<DMSessionInfo?> loadDmSessionsInfos(List<String> ids);
   Future<void> removeDmSessionsInfo(String id);
   Future<void> removeAllDmSessionsInfo();
+
+  Future<void> saveEventStats(EventStats stats);
+  Future<void> saveEventStatsList(List<EventStats> stats);
+  EventStats? loadEventStats(String eventId);
+  List<EventStats?> loadEventStatsList(List<String> eventIds);
+  Future<void> removeEventStats(String eventId);
+  Future<void> removeAllEventStats();
 
   Future<void> clearCache();
 }

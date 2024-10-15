@@ -56,11 +56,15 @@ class Metadata {
       picture: map['picture'] as String? ?? '',
       banner: map['banner'] as String? ?? '',
       website: map['website'] as String? ?? '',
-      nip05: map['nip05'] as String? ?? '',
+      nip05: map['nip05'] is String? ? map['nip05'] as String? ?? '' : '',
       lud16: map['lud16'] as String? ?? '',
       lud06: map['lud06'] as String? ?? '',
       createdAt: createdAt ?? DateTime.now().toSecondsSinceEpoch(),
-      isDeleted: map['deleted'] as bool? ?? false,
+      isDeleted: map['deleted'] is String?
+          ? (map['deleted'] as String?) == 'true'
+              ? true
+              : false
+          : map['deleted'] as bool? ?? false,
     );
   }
 

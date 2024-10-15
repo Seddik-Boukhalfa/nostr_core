@@ -1,3 +1,4 @@
+// ignore_for_file: public_member_api_docs, sort_constructors_first
 /// filter is a JSON object that determines what events will be sent in that subscription
 class Filter {
   /// a list of event ids or prefixes
@@ -135,5 +136,60 @@ class Filter {
     }
 
     return data;
+  }
+}
+
+class RemoteCacheFilter {
+  final String type;
+  final String? eventId;
+  final String? pubkey;
+  final bool? extendedResponse;
+  final int? limit;
+  final String? userPubkey;
+  final List<String>? pubkeys;
+  final List<String>? eventIds;
+
+  RemoteCacheFilter({
+    required this.type,
+    this.eventId,
+    this.pubkey,
+    this.extendedResponse,
+    this.limit,
+    this.userPubkey,
+    this.pubkeys,
+    this.eventIds,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'cache': [
+        type,
+        <String, dynamic>{
+          if (eventId != null) 'event_id': eventId,
+          if (pubkey != null) 'pubkey': pubkey,
+          if (extendedResponse != null) 'extended_response': extendedResponse,
+          if (limit != null) 'limit': limit,
+          if (userPubkey != null) 'user_pubkey': userPubkey,
+          if (pubkeys != null) 'pubkeys': pubkeys,
+          if (eventIds != null) 'event_ids': eventIds,
+        }
+      ]
+    };
+  }
+
+  factory RemoteCacheFilter.fromString(Map<String, dynamic> data) {
+    final d = data['cache'];
+    final type = d[0];
+    final usedInfos = d[1];
+    return RemoteCacheFilter(
+      type: type,
+      eventId: usedInfos['event_id'],
+      eventIds: usedInfos['event_ids'],
+      extendedResponse: usedInfos['extended_response'],
+      limit: usedInfos['limit'],
+      pubkey: usedInfos['pubkey'],
+      pubkeys: usedInfos['pubkeys'],
+      userPubkey: usedInfos['user_pubkey'],
+    );
   }
 }

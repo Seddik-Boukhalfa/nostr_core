@@ -8,6 +8,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:nostr_core/cache/cache_manager.dart';
+import 'package:nostr_core/cache/remote_cache_service.dart';
 import 'package:nostr_core/models/contact_list.dart';
 import 'package:nostr_core/models/metadata.dart';
 import 'package:nostr_core/models/pubkey_mapping.dart';
@@ -47,6 +48,10 @@ const List<String> DEFAULT_BOOTSTRAP_RELAYS = [
 class NostrCore {
   CacheManager cacheManager;
 
+  RemoteCacheService remoteCacheService = RemoteCacheService(
+    cacheUrl: 'wss://cache2.primal.net/v1',
+  );
+
   Uuid uuid = const Uuid();
 
   NoticeCallBack? noticeCallBack;
@@ -83,6 +88,8 @@ class NostrCore {
   }
 
   void forceReconnect() async {
+    remoteCacheService.reconnect();
+
     final nostrConnectRelays = List<String>.from(relays());
 
     await closeConnect(nostrConnectRelays);
@@ -309,6 +316,7 @@ class NostrCore {
     Map<String, List<Filter>> result = {};
 
     final webSocketRelays = this.relays();
+
     for (var relay in webSocketRelays) {
       if (relays.isNotEmpty && relays.contains(relay) || relays.isEmpty) {
         if (webSockets[relay] != null) {
@@ -479,7 +487,6 @@ class NostrCore {
   void _handleMessage(String message, String relay) {
     try {
       var m = Message.deserialize(message);
-
       switch (m.type) {
         case 'EVENT':
           _handleEvent(m.message, relay);
@@ -497,13 +504,13 @@ class NostrCore {
           printLog('Received message not supported: $message');
           break;
       }
-    } catch (e) {
+    } catch (e, stack) {
+      logger.i(stack);
       printLog('Received message not supported: $message');
     }
   }
 
   void _handleEvent(Event event, String relay) {
-    // printLog('Received event: ${event.serialize()}');
     String? subscriptionId = event.subscriptionId;
     if (subscriptionId != null) {
       String requestsMapKey = subscriptionId + relay;
@@ -555,7 +562,7 @@ class NostrCore {
       _handleMessage(message, relay);
     }, onDone: () {
       printLog('connect aborted');
-      _setConnectStatus(relay, 3); // closed
+      _setConnectStatus(relay, 3);
       if (!closedRelays.contains(relay)) {
         connect(relay);
       }
@@ -817,13 +824,18 @@ class NostrCore {
     List<String> pubKeys,
     List<String> relays, {
     Function? onRefresh,
+    bool? forceSeach,
   }) async {
     List<String> missingPubKeys = [];
 
-    for (var pubKey in pubKeys) {
-      Metadata? userMetadata = cacheManager.loadMetadata(pubKey);
-      if (userMetadata == null) {
-        missingPubKeys.add(pubKey);
+    if (forceSeach != null) {
+      missingPubKeys = pubKeys;
+    } else {
+      for (var pubKey in pubKeys) {
+        Metadata? userMetadata = cacheManager.loadMetadata(pubKey);
+        if (userMetadata == null) {
+          missingPubKeys.add(pubKey);
+        }
       }
     }
 
@@ -1400,7 +1412,11 @@ typedef OKCallBack = void Function(
 typedef EventCallBack = void Function(Event event, String relay);
 
 typedef EOSECallBack = void Function(
-    String requestId, OKEvent ok, String relay, List<String> unCompletedRelays);
+  String requestId,
+  OKEvent ok,
+  String relay,
+  List<String> unCompletedRelays,
+);
 
 typedef ConnectStatusCallBack = void Function(String relay, int status);
 

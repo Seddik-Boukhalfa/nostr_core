@@ -4,10 +4,13 @@ import 'dart:typed_data';
 
 import 'package:convert/convert.dart';
 import 'package:nostr_core/nostr/event_signer/event_signer.dart';
+import 'package:nostr_core/nostr/remote_cache_event.dart';
 import 'package:nostr_core/nostr/utils.dart';
 import 'package:pointycastle/export.dart';
 
-class Event {
+import '../utils/static_properties.dart';
+
+class Event implements BaseEvent {
   late String id;
 
   late String pubkey;
@@ -45,6 +48,24 @@ class Event {
     bool verify = false,
   }) {
     pubkey = pubkey.toLowerCase();
+  }
+
+  String? getEventParent() {
+    String? selectedTag;
+
+    for (final tag in stTags) {
+      if (isQuote()) {
+        if (tag.first == 'q' && tag.length > 1) {
+          selectedTag = tag[1];
+        }
+      } else {
+        if (tag.first == 'e' && tag.length > 1) {
+          selectedTag = tag[1];
+        }
+      }
+    }
+
+    return selectedTag;
   }
 
   static List<String> getTags(List<List<String>> list, String tag) {
@@ -93,6 +114,20 @@ class Event {
       }
     }
     return tags;
+  }
+
+  bool isQuote() {
+    if (kind == EventKind.TEXT_NOTE) {
+      for (final tag in stTags) {
+        if (tag.first == 'q' && tag.length >= 2) {
+          return true;
+        }
+      }
+
+      return false;
+    } else {
+      return false;
+    }
   }
 
   String? get root {

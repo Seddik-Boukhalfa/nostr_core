@@ -30,6 +30,24 @@ class Zap {
     return 'https://$domainname/.well-known/lnurlp/$username';
   }
 
+  static String? getLud16FromLud06(String lud06) {
+    try {
+      if (StringUtil.isNotBlank(lud06) &&
+          lud06.toLowerCase().startsWith('lnurl')) {
+        final decode = decodeLud06Link(lud06);
+        if (decode.isNotEmpty) {
+          final uri = Uri.parse(decode);
+          return '${uri.pathSegments[2]}@${uri.host}';
+        }
+        return null;
+      } else {
+        return null;
+      }
+    } catch (e) {
+      return null;
+    }
+  }
+
   static String? getLnurlFromLud16(String lud16) {
     if (StringUtil.isBlank(lud16)) {
       return null;

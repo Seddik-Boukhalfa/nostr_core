@@ -7,6 +7,7 @@ import 'package:nostr_core/cache/cache_manager.dart';
 import 'package:nostr_core/db/db_contact_list.dart';
 import 'package:nostr_core/db/db_dm_info.dart';
 import 'package:nostr_core/db/db_event.dart';
+import 'package:nostr_core/db/db_event_stats.dart';
 import 'package:nostr_core/db/db_metadata.dart';
 import 'package:nostr_core/db/db_nip05.dart';
 import 'package:nostr_core/db/db_relay_set.dart';
@@ -14,6 +15,7 @@ import 'package:nostr_core/db/db_user_relay_list.dart';
 import 'package:nostr_core/models/contact_list.dart';
 import 'package:nostr_core/models/dm_session_info.dart';
 import 'package:nostr_core/models/event_filter.dart';
+import 'package:nostr_core/models/event_stats.dart';
 import 'package:nostr_core/models/metadata.dart';
 import 'package:nostr_core/models/nip05.dart';
 import 'package:nostr_core/nostr/event.dart';
@@ -51,22 +53,18 @@ class DbCacheManager extends CacheManager {
         DbMetadataSchema,
         DbNip05Schema,
         DbDmSessionInfoSchema,
+        DbEventStatsSchema,
       ],
     );
   }
 
   @override
   Future<void> saveUserRelayList(UserRelayList userRelayList) async {
-    final startTime = DateTime.now();
-    isar.write((isar) {
-      isar.dbUserRelayLists
-          .put(DbUserRelayList.fromUserRelayList(userRelayList));
-    });
-    final endTime = DateTime.now();
-    final duration = endTime.difference(startTime);
-    if (kDebugMode) {
-      print(
-          "SAVED UserRelayList ${userRelayList.pubkey} took ${duration.inMilliseconds} ms");
+    if (userRelayList.pubkey.isNotEmpty) {
+      isar.write((isar) {
+        isar.dbUserRelayLists
+            .put(DbUserRelayList.fromUserRelayList(userRelayList));
+      });
     }
   }
 
@@ -82,34 +80,32 @@ class DbCacheManager extends CacheManager {
 
   @override
   Future<void> saveRelaySet(RelaySet relaySet) async {
-    final startTime = DateTime.now();
-    isar.write((isar) {
-      isar.dbRelaySets.put(DbRelaySet.fromRelaySet(relaySet));
-    });
-    final endTime = DateTime.now();
-    final duration = endTime.difference(startTime);
-    if (kDebugMode) {
-      print(
-          "SAVED relaySet ${relaySet.name}+${relaySet.pubKey} took ${duration.inMilliseconds} ms");
+    if (relaySet.id.isNotEmpty) {
+      isar.write((isar) {
+        isar.dbRelaySets.put(DbRelaySet.fromRelaySet(relaySet));
+      });
     }
   }
 
   @override
   Future<void> saveUserRelayLists(List<UserRelayList> userRelayLists) async {
-    final startTime = DateTime.now();
-    isar.write((isar) {
-      isar.dbUserRelayLists.putAll(userRelayLists
-          .map(
-            (e) => DbUserRelayList.fromUserRelayList(e),
-          )
-          .toList());
-    });
-    final endTime = DateTime.now();
-    final duration = endTime.difference(startTime);
-    if (kDebugMode) {
-      print(
-          "SAVED ${userRelayLists.length} UserRelayLists took ${duration.inMilliseconds} ms");
-    }
+    final validRelayList = userRelayLists
+        .where(
+          (r) => r.pubkey.isNotEmpty,
+        )
+        .toList();
+
+    isar.write(
+      (isar) {
+        isar.dbUserRelayLists.putAll(
+          validRelayList
+              .map(
+                (e) => DbUserRelayList.fromUserRelayList(e),
+              )
+              .toList(),
+        );
+      },
+    );
   }
 
   @override
@@ -119,36 +115,32 @@ class DbCacheManager extends CacheManager {
 
   @override
   Future<void> saveContactList(ContactList contactList) async {
-    final startTime = DateTime.now();
-    isar.write((isar) {
-      isar.dbContactLists.put(DbContactList.fromContactList(contactList));
-    });
-    final endTime = DateTime.now();
-    final duration = endTime.difference(startTime);
-    if (kDebugMode) {
-      print(
-          "SAVED ${contactList.pubkey} ContacList took ${duration.inMilliseconds} ms");
+    if (contactList.pubkey.isNotEmpty) {
+      isar.write(
+        (isar) {
+          isar.dbContactLists.put(DbContactList.fromContactList(contactList));
+        },
+      );
     }
   }
 
   @override
   Future<void> saveContactLists(List<ContactList> contactLists) async {
-    final startTime = DateTime.now();
-    isar.write((isar) {
-      isar.dbContactLists.putAll(
-          contactLists.map((e) => DbContactList.fromContactList(e)).toList());
-    });
-    final endTime = DateTime.now();
-    final duration = endTime.difference(startTime);
-    if (kDebugMode) {
-      print(
-          "SAVED ${contactLists.length} ContactLists took ${duration.inMilliseconds} ms");
-    }
-  }
+    final validContactList = contactLists
+        .where(
+          (c) => c.pubkey.isNotEmpty,
+        )
+        .toList();
 
-  @override
-  Metadata? loadMetadata(String pubKey) {
-    return isar.dbMetadatas.get(pubKey);
+    isar.write(
+      (isar) {
+        isar.dbContactLists.putAll(
+          validContactList
+              .map((e) => DbContactList.fromContactList(e))
+              .toList(),
+        );
+      },
+    );
   }
 
   @override
@@ -207,6 +199,11 @@ class DbCacheManager extends CacheManager {
   /// *********************************************************************************************
 
   @override
+  Metadata? loadMetadata(String pubKey) {
+    return isar.dbMetadatas.get(pubKey);
+  }
+
+  @override
   Future<void> removeMetadata(String pubKey) async {
     isar.write((isar) {
       isar.dbMetadatas.delete(pubKey);
@@ -215,31 +212,26 @@ class DbCacheManager extends CacheManager {
 
   @override
   Future<void> saveMetadata(Metadata metadata) async {
-    final startTime = DateTime.now();
-    isar.write((isar) {
-      isar.dbMetadatas.put(DbMetadata.fromMetadata(metadata));
-    });
-    final endTime = DateTime.now();
-    final duration = endTime.difference(startTime);
-    if (kDebugMode) {
-      print("SAVED Metadata took ${duration.inMilliseconds} ms");
+    if (metadata.pubkey.isNotEmpty) {
+      isar.write((isar) {
+        isar.dbMetadatas.put(DbMetadata.fromMetadata(metadata));
+      });
     }
   }
 
   @override
   Future<void> saveMetadatas(List<Metadata> metadatas) async {
-    final startTime = DateTime.now();
+    final validMetadatas = metadatas
+        .where(
+          (m) => m.pubkey.isNotEmpty,
+        )
+        .toList();
+
     isar.write((isar) {
-      isar.dbMetadatas.putAll(metadatas
+      isar.dbMetadatas.putAll(validMetadatas
           .map((metadata) => DbMetadata.fromMetadata(metadata))
           .toList());
     });
-    final endTime = DateTime.now();
-    final duration = endTime.difference(startTime);
-    if (kDebugMode) {
-      print(
-          "SAVED ${metadatas.length} UserMetadatas took ${duration.inMilliseconds} ms");
-    }
   }
 
   @override
@@ -283,30 +275,17 @@ class DbCacheManager extends CacheManager {
 
   @override
   Future<void> saveNip05(Nip05 nip05) async {
-    final startTime = DateTime.now();
     isar.write((isar) {
       isar.dbNip05s.put(DbNip05.fromNip05(nip05));
     });
-    final endTime = DateTime.now();
-    final duration = endTime.difference(startTime);
-    if (kDebugMode) {
-      print("SAVED Nip05 took ${duration.inMilliseconds} ms");
-    }
   }
 
   @override
   Future<void> saveNip05s(List<Nip05> nip05s) async {
-    final startTime = DateTime.now();
     isar.write((isar) {
       isar.dbNip05s
           .putAll(nip05s.map((nip05) => DbNip05.fromNip05(nip05)).toList());
     });
-    final endTime = DateTime.now();
-    final duration = endTime.difference(startTime);
-    if (kDebugMode) {
-      print(
-          "SAVED ${nip05s.length} UserNip05s took ${duration.inMilliseconds} ms");
-    }
   }
 
   @override
@@ -337,29 +316,25 @@ class DbCacheManager extends CacheManager {
 
   @override
   Future<void> saveEvent(Event event) async {
-    final startTime = DateTime.now();
-    isar.write((isar) {
-      isar.dbEvents.put(DbEvent.fromEvent(event));
-    });
-    final endTime = DateTime.now();
-    final duration = endTime.difference(startTime);
-    if (kDebugMode) {
-      print("SAVED Event took ${duration.inMilliseconds} ms");
+    if (event.id.isNotEmpty) {
+      isar.write((isar) {
+        isar.dbEvents.put(DbEvent.fromEvent(event));
+      });
     }
   }
 
   @override
   Future<void> saveEvents(List<Event> events) async {
-    final startTime = DateTime.now();
+    final validEvents = events
+        .where(
+          (e) => e.id.isNotEmpty,
+        )
+        .toList();
+
     isar.write((isar) {
-      isar.dbEvents
-          .putAll(events.map((event) => DbEvent.fromEvent(event)).toList());
+      isar.dbEvents.putAll(
+          validEvents.map((event) => DbEvent.fromEvent(event)).toList());
     });
-    final endTime = DateTime.now();
-    final duration = endTime.difference(startTime);
-    if (kDebugMode) {
-      print("SAVED ${events.length} Events took ${duration.inMilliseconds} ms");
-    }
   }
 
   @override
@@ -521,6 +496,51 @@ class DbCacheManager extends CacheManager {
   }
 
   @override
+  EventStats? loadEventStats(String eventId) {
+    return isar.dbEventStats.get(eventId)?.eventStats();
+  }
+
+  @override
+  List<EventStats?> loadEventStatsList(List<String> eventIds) {
+    return isar.dbEventStats
+        .getAll(eventIds)
+        .map(
+          (e) => e?.eventStats(),
+        )
+        .toList();
+  }
+
+  @override
+  Future<void> removeEventStats(String eventId) async {
+    isar.write((isar) {
+      isar.dbEventStats.delete(eventId);
+    });
+  }
+
+  @override
+  Future<void> removeAllEventStats() async {
+    isar.write((isar) {
+      isar.dbEventStats.clear();
+    });
+  }
+
+  @override
+  Future<void> saveEventStats(EventStats stats) async {
+    isar.write((isar) {
+      isar.dbEventStats.put(DbEventStats.fromEventStats(stats));
+    });
+  }
+
+  @override
+  Future<void> saveEventStatsList(List<EventStats> stats) async {
+    isar.write((isar) {
+      isar.dbEventStats.putAll(
+        stats.map((info) => DbEventStats.fromEventStats(info)).toList(),
+      );
+    });
+  }
+
+  @override
   Future<void> clearCache() async {
     Future.wait(
       [
@@ -530,6 +550,7 @@ class DbCacheManager extends CacheManager {
         removeAllNip05s(),
         removeAllRelaySets(),
         removeAllUserRelayLists(),
+        removeAllEventStats(),
       ],
     );
   }

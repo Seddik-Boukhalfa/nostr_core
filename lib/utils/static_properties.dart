@@ -43,6 +43,8 @@ class EventKind {
 
   static const int RELAY_LIST_METADATA = 10002;
 
+  static const int INTEREST_SET = 10015;
+
   static const int NWC_INFO = 13194;
 
   static const int AUTHENTICATION = 22242;
@@ -82,6 +84,10 @@ class EventKind {
   static const int APPLICATION_INFO = 31990;
 
   static const int APPLICATIONS_REFERENCE = 31989;
+}
+
+class CacheEventKind {
+  static const int EVENT_STATS = 10000100;
 }
 
 class PointsActions {

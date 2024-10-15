@@ -1,8 +1,7 @@
 import 'package:nostr_core/models/contact_list.dart';
 import 'package:nostr_core/nostr/event.dart';
 import 'package:nostr_core/nostr/nips/nip_065.dart';
-import 'package:nostr_core/utils/enums.dart';
-import 'package:nostr_core/utils/relay.dart';
+import 'package:nostr_core/utils/utils.dart';
 
 class UserRelayList {
   String pubkey;
@@ -37,13 +36,18 @@ class UserRelayList {
       .toList();
 
   static UserRelayList fromNip65(Nip65 nip65) {
+    final relays = <String, ReadWriteMarker>{};
+
+    for (var entry in nip65.relays.entries) {
+      final r = Relay.clean(entry.key);
+      if (r != null) {
+        relays[r] = entry.value;
+      }
+    }
+
     return UserRelayList(
       pubkey: nip65.pubkey,
-      relays: {
-        for (var entry in nip65.relays.entries)
-          if (Relay.clean(entry.key) != null)
-            Relay.clean(entry.key)!: entry.value
-      },
+      relays: relays,
       createdAt: nip65.createdAt,
       refreshedTimestamp: DateTime.now().millisecondsSinceEpoch ~/ 1000,
     );

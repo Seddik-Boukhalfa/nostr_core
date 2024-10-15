@@ -2,7 +2,7 @@
 
 class Relay {
   static RegExp RELAY_URL_REGEX = RegExp(
-      r'^(wss?:\/\/)([0-9]{1,3}(?:\.[0-9]{1,3}){3}|[^:]+):?([0-9]{1,5})?$');
+      r'^(wss:\/\/)([0-9]{1,3}(?:\.[0-9]{1,3}){3}|[^:]+):?([0-9]{1,5})?$');
 
   static String? clean(String adr) {
     if (adr.endsWith("/")) {

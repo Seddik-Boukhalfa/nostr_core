@@ -1,8 +1,12 @@
 import 'dart:convert';
 
 import 'package:nostr_core/nostr/close.dart';
+import 'package:nostr_core/nostr/closed.dart';
 import 'package:nostr_core/nostr/event.dart';
+import 'package:nostr_core/nostr/remote_cache_event.dart';
 import 'package:nostr_core/nostr/request.dart';
+
+import '../cache/remote_cache_service.dart';
 
 // Used to deserialize any kind of message that a nostr client or relay can transmit.
 class Message {
@@ -12,7 +16,16 @@ class Message {
 // nostr message deserializer
   Message.deserialize(String payload) {
     dynamic data = jsonDecode(payload);
-    var messages = ['EVENT', 'REQ', 'CLOSE', 'NOTICE', 'EOSE', 'OK', 'AUTH'];
+    var messages = [
+      'EVENT',
+      'REQ',
+      'CLOSE',
+      'CLOSED',
+      'NOTICE',
+      'EOSE',
+      'OK',
+      'AUTH'
+    ];
     assert(messages.contains(data[0]), 'Unsupported payload (or NIP)');
 
     type = data[0];
@@ -25,6 +38,51 @@ class Message {
         break;
       case 'CLOSE':
         message = Close.deserialize(data);
+        break;
+      case 'CLOSED':
+        message = Closed.deserialize(data);
+        break;
+      default:
+        message = jsonEncode(data.sublist(1));
+        break;
+    }
+  }
+}
+
+class RemoteCacheMessage {
+  late String type;
+  late dynamic message;
+
+  RemoteCacheMessage.deserialize(String payload) {
+    dynamic data = jsonDecode(payload);
+
+    var messages = [
+      'EVENT',
+      'REQ',
+      'CLOSE',
+      'EOSE',
+    ];
+
+    assert(messages.contains(data[0]), 'Unsupported payload (or NIP)');
+
+    type = data[0];
+
+    switch (type) {
+      case 'EVENT':
+        {
+          message = data[2]['kind'] > 1000000
+              ? RemoteCacheEvent.deserialize(data)
+              : Event.deserialize(data);
+        }
+        break;
+      case 'REQ':
+        message = RemoteCacheRequest.deserialize(data);
+        break;
+      case 'CLOSE':
+        message = Close.deserialize(data);
+        break;
+      case 'CLOSED':
+        message = Closed.deserialize(data);
         break;
       default:
         message = jsonEncode(data.sublist(1));
