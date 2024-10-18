@@ -1,3 +1,4 @@
+import 'package:nostr_core/db/db_user_followers.dart';
 import 'package:nostr_core/models/contact_list.dart';
 import 'package:nostr_core/models/dm_session_info.dart';
 import 'package:nostr_core/models/event_stats.dart';
@@ -72,6 +73,11 @@ abstract class CacheManager {
   List<EventStats?> loadEventStatsList(List<String> eventIds);
   Future<void> removeEventStats(String eventId);
   Future<void> removeAllEventStats();
+
+  Future<void> saveUserFollowers(DbUserFollowers dbUserFollowers);
+  Future<DbUserFollowers?> loadUserFollowers(String pubkey);
+  Future<void> removeUserFollowers(String pubkey);
+  Future<void> removeAllUserFollowers();
 
   Future<void> clearCache();
 }

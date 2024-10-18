@@ -29,15 +29,13 @@ class RemoteCacheService {
 
   Future<void> connectCache() async {
     try {
-      if (cacheSocket == null) {
-        cacheSocket = await WebSocket.connect(cacheUrl).timeout(
-          const Duration(seconds: 5),
-        );
+      cacheSocket = await WebSocket.connect(cacheUrl).timeout(
+        const Duration(seconds: 5),
+      );
 
-        connectionStatus = 1;
+      connectionStatus = 1;
 
-        _listenEvent();
-      }
+      _listenEvent();
     } catch (e) {
       logger.i(e);
     }

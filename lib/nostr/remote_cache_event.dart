@@ -2,6 +2,12 @@
 
 abstract class BaseEvent {}
 
+class RemoteCacheEventsType {
+  static const userFollowers = 'user_followers';
+  static const userMutuals = 'mutual_follows';
+  static const userProfile = 'user_profile';
+}
+
 class RemoteCacheEvent implements BaseEvent {
   final int kind;
   final String? subscriptionId;

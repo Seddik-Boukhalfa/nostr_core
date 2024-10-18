@@ -11,6 +11,7 @@ import 'package:nostr_core/db/db_event_stats.dart';
 import 'package:nostr_core/db/db_metadata.dart';
 import 'package:nostr_core/db/db_nip05.dart';
 import 'package:nostr_core/db/db_relay_set.dart';
+import 'package:nostr_core/db/db_user_followers.dart';
 import 'package:nostr_core/db/db_user_relay_list.dart';
 import 'package:nostr_core/models/contact_list.dart';
 import 'package:nostr_core/models/dm_session_info.dart';
@@ -54,6 +55,7 @@ class DbCacheManager extends CacheManager {
         DbNip05Schema,
         DbDmSessionInfoSchema,
         DbEventStatsSchema,
+        DbUserFollowersSchema,
       ],
     );
   }
@@ -537,6 +539,32 @@ class DbCacheManager extends CacheManager {
       isar.dbEventStats.putAll(
         stats.map((info) => DbEventStats.fromEventStats(info)).toList(),
       );
+    });
+  }
+
+  @override
+  Future<DbUserFollowers?> loadUserFollowers(String pubkey) async {
+    return isar.dbUserFollowers.get(pubkey);
+  }
+
+  @override
+  Future<void> removeAllUserFollowers() async {
+    isar.write((isar) {
+      isar.dbUserFollowers.clear();
+    });
+  }
+
+  @override
+  Future<void> removeUserFollowers(String pubkey) async {
+    isar.write((isar) {
+      isar.dbUserFollowers.delete(pubkey);
+    });
+  }
+
+  @override
+  Future<void> saveUserFollowers(DbUserFollowers dbUserFollowers) async {
+    isar.write((isar) {
+      isar.dbUserFollowers.put(dbUserFollowers);
     });
   }
 

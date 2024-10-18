@@ -42,12 +42,12 @@ class ContactList {
       final contact = tag[1];
       if (name == "p") {
         String relay = '';
-        String petname = '';
+        // String petname = '';
         if (length > 2) {
           relay = tag[2];
-          if (length > 3) {
-            petname = tag[3];
-          }
+          // if (length > 3) {
+          //   petname = tag[3];
+          // }
         }
         contacts.add(contact);
         final r = Relay.clean(relay);
@@ -56,7 +56,7 @@ class ContactList {
           contactRelays.add(r);
         }
 
-        petnames.add(petname);
+        // petnames.add(petname);
       } else if (name == "t" && length > 1) {
         var tagName = tag[1];
         followedTags.add(tagName);
