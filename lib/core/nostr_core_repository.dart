@@ -504,8 +504,7 @@ class NostrCore {
           printLog('Received message not supported: $message');
           break;
       }
-    } catch (e, stack) {
-      logger.i(stack);
+    } catch (e) {
       printLog('Received message not supported: $message');
     }
   }

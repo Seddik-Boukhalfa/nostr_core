@@ -6,6 +6,14 @@ class RemoteCacheEventsType {
   static const userFollowers = 'user_followers';
   static const userMutuals = 'mutual_follows';
   static const userProfile = 'user_profile';
+  static const feed = 'feed';
+  static const explore = 'explore';
+  static const popularNotes = 'user_profile_scored_content';
+}
+
+class RemoteCacheEventKind {
+  static const userInfoKind = 10000105;
+  static const feedLastUntil = 10000113;
 }
 
 class RemoteCacheEvent implements BaseEvent {

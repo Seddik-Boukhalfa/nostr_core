@@ -148,6 +148,11 @@ class RemoteCacheFilter {
   final String? userPubkey;
   final List<String>? pubkeys;
   final List<String>? eventIds;
+  final int? until;
+  final int? createdAfter;
+  final String? selector;
+  final String? timeFrame;
+  final String? scope;
 
   RemoteCacheFilter({
     required this.type,
@@ -158,6 +163,11 @@ class RemoteCacheFilter {
     this.userPubkey,
     this.pubkeys,
     this.eventIds,
+    this.until,
+    this.selector,
+    this.timeFrame,
+    this.scope,
+    this.createdAfter,
   });
 
   Map<String, dynamic> toMap() {
@@ -172,6 +182,11 @@ class RemoteCacheFilter {
           if (userPubkey != null) 'user_pubkey': userPubkey,
           if (pubkeys != null) 'pubkeys': pubkeys,
           if (eventIds != null) 'event_ids': eventIds,
+          if (until != null) 'until': until,
+          if (selector != null) 'selector': selector,
+          if (timeFrame != null) 'timeframe': timeFrame,
+          if (scope != null) 'scope': scope,
+          if (createdAfter != null) 'created_after': createdAfter,
         }
       ]
     };
@@ -190,6 +205,11 @@ class RemoteCacheFilter {
       pubkey: usedInfos['pubkey'],
       pubkeys: usedInfos['pubkeys'],
       userPubkey: usedInfos['user_pubkey'],
+      until: usedInfos['until'],
+      selector: usedInfos['selector'],
+      timeFrame: usedInfos['timeframe'],
+      scope: usedInfos['scope'],
+      createdAfter: usedInfos['created_after'],
     );
   }
 }

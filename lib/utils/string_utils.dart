@@ -51,11 +51,17 @@ class StringUtil {
   static String formatTimeDifference(DateTime startDate) {
     Duration difference = DateTime.now().difference(startDate);
 
-    int daysDifference = difference.inDays;
+    int yearsDifference = difference.inDays ~/ 365;
+    int monthsDifference = (difference.inDays % 365) ~/ 30;
+    int daysDifference = difference.inDays % 30;
     int hoursDifference = difference.inHours % 24;
     int minutesDifference = difference.inMinutes % 60;
 
-    if (daysDifference > 0) {
+    if (yearsDifference > 0) {
+      return '${startDate.year}-${startDate.month.toString().padLeft(2, '0')}-${startDate.day.toString().padLeft(2, '0')}';
+    } else if (monthsDifference > 0) {
+      return '$monthsDifference ${_pluralize(monthsDifference, 'month')} ago';
+    } else if (daysDifference > 0) {
       return '$daysDifference ${_pluralize(daysDifference, 'day')} ago';
     } else if (hoursDifference > 0) {
       return '$hoursDifference ${_pluralize(hoursDifference, 'hour')} ago';

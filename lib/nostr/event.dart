@@ -59,13 +59,41 @@ class Event implements BaseEvent {
           selectedTag = tag[1];
         }
       } else {
-        if (tag.first == 'e' && tag.length > 1) {
+        if (tag.first == 'a' && tag.length > 1) {
+          return tag[1];
+        } else if (tag.first == 'e' && tag.length > 1) {
           selectedTag = tag[1];
         }
       }
     }
 
     return selectedTag;
+  }
+
+  bool isUncensoredNote() {
+    bool isUncensoredNote = false;
+
+    for (final tag in stTags) {
+      final tagLength = tag.length;
+
+      if (tagLength >= 2 && tag[0] == 'l' && tag[1] == 'UNCENSORED NOTE') {
+        isUncensoredNote = true;
+      }
+    }
+
+    return isUncensoredNote;
+  }
+
+  bool isUnRate() {
+    bool hasEncryption = false;
+
+    for (final tag in stTags) {
+      if (tag.first == 'yaki_flash_news' && tag.length > 1) {
+        hasEncryption = true;
+      }
+    }
+
+    return hasEncryption && kind == EventKind.REACTION;
   }
 
   static List<String> getTags(List<List<String>> list, String tag) {

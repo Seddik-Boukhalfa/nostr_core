@@ -44,6 +44,18 @@ class EventStats {
     return [total, highestZap];
   }
 
+  Map<String, int> get getZappersList {
+    Map<String, int> zappers = {};
+
+    zaps.forEach(
+      (user, groupedZaps) {
+        zappers[user] = groupedZaps.values.toList().reduce((a, b) => a + b);
+      },
+    );
+
+    return zappers;
+  }
+
   bool isSelfReaction(String pubkey) => reactions.values.contains(pubkey);
   bool isSelfReply(String pubkey) => replies.values.contains(pubkey);
   bool isSelfQuote(String pubkey) => quotes.values.contains(pubkey);
@@ -135,10 +147,12 @@ class EventStats {
   }
 
   bool canAddNote(List<String> tag, String noteId) {
-    return (tag.first == 'e' &&
+    return ((tag.first == 'e' || tag.first == 'a') &&
             tag.length > 3 &&
             tag[3] == 'root' &&
             tag[1] == noteId) ||
-        tag.first == 'e' && tag.length > 1 && tag[1] == noteId;
+        (tag.first == 'e' || tag.first == 'a') &&
+            tag.length > 1 &&
+            tag[1] == noteId;
   }
 }
