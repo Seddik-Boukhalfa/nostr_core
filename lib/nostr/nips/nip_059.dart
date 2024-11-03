@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:bip340/bip340.dart' as bip340;
 import 'package:nostr_core/nostr/event.dart';
 import 'package:nostr_core/nostr/event_signer/bip340_event_signer.dart';
-import 'package:nostr_core/nostr/event_signer/event_signer.dart';
 import 'package:nostr_core/nostr/event_signer/keychain.dart';
 import 'package:nostr_core/nostr/nips/nip_044.dart';
 import 'package:nostr_core/utils/static_properties.dart';
@@ -11,8 +10,7 @@ import 'package:nostr_core/utils/static_properties.dart';
 class Nip59 {
   static Future<Event> encode(
     Event event,
-    String peerPubkey,
-    EventSigner signer, {
+    String peerPubkey, {
     String? kind,
     int? expiration,
     int? createAt,

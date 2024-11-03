@@ -49,13 +49,9 @@ class AmberEventSigner implements EventSigner {
 
   @override
   Future<String?> encrypt04(String msg, String destPubKey, {String? id}) async {
-    final npub = publicKey.startsWith('npub')
-        ? publicKey
-        : Nip19.encodePubkey(publicKey);
-
     Map<dynamic, dynamic> map = await amber.nip04Encrypt(
       plaintext: msg,
-      currentUser: npub,
+      currentUser: Nip19.encodePubkey(publicKey),
       pubKey: destPubKey,
       id: id,
     );
@@ -86,34 +82,26 @@ class AmberEventSigner implements EventSigner {
 
   @override
   Future<String?> decrypt44(String msg, String destPubKey, {String? id}) async {
-    final npub = publicKey.startsWith('npub')
-        ? publicKey
-        : Nip19.encodePubkey(publicKey);
-
     Map<dynamic, dynamic> map = await amber.nip44Decrypt(
       ciphertext: msg,
-      currentUser: npub,
+      currentUser: Nip19.encodePubkey(publicKey),
       pubKey: destPubKey,
       id: id,
     );
 
-    return map['event'];
+    return map['signature'];
   }
 
   @override
   Future<String?> encrypt44(String msg, String destPubKey, {String? id}) async {
-    final npub = publicKey.startsWith('npub')
-        ? publicKey
-        : Nip19.encodePubkey(publicKey);
-
     Map<dynamic, dynamic> map = await amber.nip44Encrypt(
       plaintext: msg,
-      currentUser: npub,
+      currentUser: Nip19.encodePubkey(publicKey),
       pubKey: destPubKey,
       id: id,
     );
 
-    return map['event'];
+    return map['signature'];
   }
 
   @override
@@ -131,26 +119,31 @@ class AmberEventSigner implements EventSigner {
     Event event, {
     String? id,
   }) async {
-    final sgString = await decrypt44(event.content, event.pubkey);
+    try {
+      final sgString = await decrypt44(event.content, event.pubkey);
 
-    if (sgString != null) {
-      final sgEvent = Event.fromJson(
-        jsonDecode(sgString),
-        currentUser: publicKey,
-      );
-
-      final decrypt = await decrypt44(sgEvent.content, sgEvent.pubkey);
-
-      if (decrypt != null) {
-        return Event.fromJson(
-          jsonDecode(decrypt),
+      if (sgString != null) {
+        final sgEvent = Event.fromJson(
+          jsonDecode(sgString),
           currentUser: publicKey,
         );
+
+        final decrypt = await decrypt44(sgEvent.content, sgEvent.pubkey);
+
+        if (decrypt != null) {
+          return Event.fromJson(
+            jsonDecode(decrypt),
+            currentUser: publicKey,
+          );
+        }
+
+        return null;
       }
 
       return null;
+    } catch (_) {
+      return null;
     }
-    return null;
   }
 
   @override
@@ -159,35 +152,29 @@ class AmberEventSigner implements EventSigner {
     String destPubKey, {
     String? id,
   }) async {
-    final encrypt = await encrypt44(jsonEncode(event.toJson()), destPubKey);
+    final encode = json.encode(event.toJson());
+
+    final encrypt = await encrypt44(
+      encode,
+      destPubKey,
+    );
 
     if (encrypt != null) {
-      final npub = publicKey.startsWith('npub')
-          ? publicKey
-          : Nip19.encodePubkey(publicKey);
-
-      final ev = Event.partial(
-        pubkey: npub,
+      final ev = await Event.genEvent(
         kind: EventKind.SEALED_EVENT,
-        tags: [],
         content: encrypt,
+        tags: [],
+        signer: this,
       );
 
-      await sign(ev);
-
-      final sgString = await encrypt44(jsonEncode(ev.toJson()), destPubKey);
-
-      if (sgString != null) {
-        final keys = Keychain.generate();
-
-        return Event.partial(
-          pubkey: keys.public,
-          kind: EventKind.GIFT_WRAP,
-          tags: [],
-          content: sgString,
-          sig: Bip340.sign(event.id, keys.private),
-        );
+      if (ev == null) {
+        return null;
       }
+
+      return Nip59.encode(
+        ev,
+        destPubKey,
+      );
     }
 
     return null;

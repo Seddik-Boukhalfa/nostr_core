@@ -51,23 +51,34 @@ class Event implements BaseEvent {
   }
 
   String? getEventParent() {
-    String? selectedTag;
+    String? root;
+    String? reply;
 
     for (final tag in stTags) {
-      if (isQuote()) {
-        if (tag.first == 'q' && tag.length > 1) {
-          selectedTag = tag[1];
+      if (kind == EventKind.REACTION ||
+          kind == EventKind.REPOST ||
+          kind == EventKind.ZAP) {
+        if ((tag.first == 'a' || tag.first == 'e') && tag.length > 1) {
+          reply = tag[1];
         }
       } else {
-        if (tag.first == 'a' && tag.length > 1) {
-          return tag[1];
-        } else if (tag.first == 'e' && tag.length > 1) {
-          selectedTag = tag[1];
+        if (isQuote()) {
+          if (tag.first == 'q' && tag.length > 1) {
+            reply = tag[1];
+          }
+        } else {
+          if (tag.length > 3 &&
+              (tag.first == 'a' || tag.first == 'e') &&
+              tag[3] == 'root') {
+            root = tag[1];
+          } else if (tag.length > 3 && tag.first == 'e' && tag[3] == 'reply') {
+            reply = tag[1];
+          }
         }
       }
     }
 
-    return selectedTag;
+    return reply ?? root;
   }
 
   bool isUncensoredNote() {
@@ -136,6 +147,7 @@ class Event implements BaseEvent {
 
   static List<String> getEtags(List<List<String>> list, String tag) {
     List<String> tags = [];
+
     for (var e in list) {
       if (e.length > 3 && e[3] == tag) {
         tags = e;
@@ -160,12 +172,22 @@ class Event implements BaseEvent {
 
   String? get root {
     final sTags = getEtags(stTags, "root");
-    return sTags.isEmpty ? null : sTags.first;
+    return sTags.isEmpty ? null : sTags[1];
   }
 
   String? get reply {
     final sTags = getEtags(stTags, "reply");
-    return sTags.isEmpty ? null : sTags.first;
+    return sTags.isEmpty ? null : sTags[1];
+  }
+
+  String? eventReply() {
+    final sTags = getEtags(stTags, "reply");
+    return sTags.isEmpty ? null : sTags[1];
+  }
+
+  String? eventRoot() {
+    final sTags = getEtags(stTags, "root");
+    return sTags.isEmpty ? null : sTags[1];
   }
 
   factory Event.partial({

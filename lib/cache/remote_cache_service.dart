@@ -17,11 +17,12 @@ typedef RemoteEOSECallBack = void Function(
 );
 
 class RemoteCacheService {
-  String cacheUrl;
+  final String cacheUrl;
   WebSocket? cacheSocket;
   int connectionStatus = 0;
   Set<String> subscriptionIds = {};
   Map<String, RemoteCacheRequest> requestsMap = {};
+  Timer? timeoutTimer;
 
   RemoteCacheService({
     required this.cacheUrl,
@@ -34,37 +35,73 @@ class RemoteCacheService {
       );
 
       connectionStatus = 1;
+      startPing();
+      resetTimeout();
 
       _listenEvent();
     } catch (e) {
       logger.i(e);
-      return;
+      connectionStatus = 0;
+      await Future.delayed(const Duration(seconds: 5));
+      await reconnect();
     }
   }
 
   Future<void> reconnect() async {
-    await closeConnect();
-    await connectCache();
+    if (connectionStatus != 2) {
+      connectionStatus = 2;
+      await closeConnect();
+      await connectCache();
+    }
   }
 
-  Future closeConnect() async {
+  Future<void> closeConnect() async {
     await cacheSocket?.close();
+    connectionStatus = 0;
   }
 
   bool isWebSocketOpen() {
     return cacheSocket != null && cacheSocket!.closeCode == null;
   }
 
-  void _listenEvent() {
-    cacheSocket!.listen((message) {
-      _handleMessage(message);
-    }, onDone: () {
-      connectionStatus = 3;
-      connectCache();
-    }, onError: (e) {
-      connectionStatus = 3; // closed
-      connectCache();
+  void resetTimeout() {
+    timeoutTimer?.cancel();
+    timeoutTimer = Timer(const Duration(minutes: 1), () {
+      closeConnect();
     });
+  }
+
+  void startPing() async {
+    await Future.delayed(const Duration(seconds: 1));
+
+    Timer.periodic(const Duration(seconds: 30), (Timer t) {
+      if (cacheSocket?.readyState == WebSocket.open) {
+        try {
+          cacheSocket?.add('ping');
+        } catch (e) {
+          t.cancel();
+        }
+      } else {
+        t.cancel();
+      }
+    });
+  }
+
+  void _listenEvent() {
+    cacheSocket!.listen(
+      (message) {
+        _handleMessage(message);
+        resetTimeout();
+      },
+      onDone: () {
+        connectionStatus = 3;
+        reconnect();
+      },
+      onError: (e) {
+        connectionStatus = 3;
+        reconnect();
+      },
+    );
   }
 
   void _handleMessage(String message) {

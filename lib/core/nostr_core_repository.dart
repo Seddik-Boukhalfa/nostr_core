@@ -274,6 +274,7 @@ class NostrCore {
           shouldClose: unCompletedRelays.isEmpty,
           onClose: () {
             if (!completer.isCompleted) {
+              closeRequests(<String>[id]);
               completer.complete(id);
             }
           },

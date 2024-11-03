@@ -27,7 +27,6 @@ class Nip17 {
         return await Nip59.encode(
           sealedGossipEvent,
           receiver,
-          signer,
           kind: kind?.toString(),
           expiration: expiration,
           createAt: Helpers.getUnixTimestampWithinOneWeek(),
