@@ -1,11 +1,15 @@
+import 'package:nostr_core/db/db_user_app_settings.dart';
+import 'package:nostr_core/db/db_user_drafts.dart';
 import 'package:nostr_core/db/db_user_followers.dart';
 import 'package:nostr_core/models/contact_list.dart';
 import 'package:nostr_core/models/dm_session_info.dart';
 import 'package:nostr_core/models/event_stats.dart';
 import 'package:nostr_core/models/metadata.dart';
+import 'package:nostr_core/models/mute_list.dart';
 import 'package:nostr_core/models/nip05.dart';
 import 'package:nostr_core/models/relay_set.dart';
 import 'package:nostr_core/models/user_relay_list.dart';
+import 'package:nostr_core/models/wot_models.dart';
 import 'package:nostr_core/nostr/event.dart';
 
 abstract class CacheManager {
@@ -44,9 +48,16 @@ abstract class CacheManager {
   Future<void> removeContactList(String pubKey);
   Future<void> removeAllContactLists();
 
+  Future<void> saveMuteList(MuteList muteList);
+  Future<void> saveMuteLists(List<MuteList> muteLists);
+  MuteList? loadMuteList(String pubKey);
+  Future<void> removeMuteList(String pubKey);
+  Future<void> removeAllMuteLists();
+
   Future<void> saveMetadata(Metadata metadata);
   Future<void> saveMetadatas(List<Metadata> metadatas);
   Metadata? loadMetadata(String pubKey);
+  Metadata? getMetadataByNip05(String nip05);
   List<Metadata?> loadMetadatas(List<String> pubKeys);
   List<Metadata> getAllMetadatas();
   Future<void> removeMetadata(String pubKey);
@@ -78,6 +89,21 @@ abstract class CacheManager {
   Future<DbUserFollowers?> loadUserFollowers(String pubkey);
   Future<void> removeUserFollowers(String pubkey);
   Future<void> removeAllUserFollowers();
+
+  Future<void> saveUserDrafts(DbUserDrafts dbUserDrafts);
+  Future<DbUserDrafts?> loadUserDrafts(String pubkey);
+  Future<void> removeUserDrafts(String pubkey);
+  Future<void> removeAllUserDrafts();
+
+  Future<void> saveUserAppSettings(DbUserAppSettings dbUserAppSettings);
+  Future<DbUserAppSettings?> loadUserAppSettings(String pubkey);
+  Future<void> removeUserAppSettings(String pubkey);
+  Future<void> removeAllAppSettings();
+
+  Future<void> saveUserWot(WotModel wotModel);
+  Future<WotModel?> loadUserWot(String pubkey);
+  Future<void> removeUserWot(String pubkey);
+  Future<void> removeAllWot();
 
   Future<void> clearCache();
 }

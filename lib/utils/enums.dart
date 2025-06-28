@@ -32,3 +32,9 @@ enum RelayDirection {
         this == RelayDirection.outbox && marker.isWrite;
   }
 }
+
+enum DvmType { notesContent, articlesContent }
+
+enum CurationTypes { all, videos, articles }
+
+enum VideoSourceTypes { all, youtube, vimeo, others }

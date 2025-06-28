@@ -33,6 +33,10 @@ class EventKind {
 
   static const int COMMUNITY_APPROVED = 4550;
 
+  static const int DVM_CONTENT_FEED = 5300;
+
+  static const int DVM_CONTENT_FEED_RESPONSE = 6300;
+
   static const int POLL = 6969;
 
   static const int ZAP_REQUEST = 9734;
@@ -70,6 +74,8 @@ class EventKind {
   static const int LONG_FORM_DRAFT = 30024;
 
   static const int SMART_WIDGET = 30031;
+
+  static const int SMART_WIDGET_ENH = 30033;
 
   static const int VIDEO_HORIZONTAL = 34235;
 
@@ -165,15 +171,61 @@ class Pastables {
 }
 
 class UploadServers {
-  static const YAKIHONNE = 'yakihonne';
-
   static const NOSTR_BUILD = 'nostr.build ';
+  static const NOSTR_MEDIA = 'nostr media';
+  static const NOSTR_CHECK = 'nostr check';
+  static const VOID_CAT = 'void cat';
 
   static String getUploadServer(String uploadServer) {
-    if (uploadServer == YAKIHONNE || uploadServer == NOSTR_BUILD) {
+    if (uploadServer == NOSTR_BUILD ||
+        uploadServer == NOSTR_MEDIA ||
+        uploadServer == NOSTR_CHECK ||
+        uploadServer == VOID_CAT) {
       return uploadServer;
     } else {
       return NOSTR_BUILD;
     }
+  }
+
+  static String getUploadServerUrl(String uploadServer) {
+    if (uploadServer == NOSTR_BUILD) {
+      return 'https://nostr.build/api/v2/nip96/upload';
+    } else if (uploadServer == NOSTR_MEDIA) {
+      return 'https://nostrmedia.com/upload';
+    } else if (uploadServer == NOSTR_CHECK) {
+      return 'https://nostrcheck.me/api/v2/media';
+    } else if (uploadServer == VOID_CAT) {
+      return 'https://void.cat/n96';
+    }
+
+    return 'https://nostr.build/api/v2/nip96/upload';
+  }
+
+  static String getUploadServerBaseUrl(String uploadServer) {
+    if (uploadServer == NOSTR_BUILD) {
+      return 'https://nostr.build';
+    } else if (uploadServer == NOSTR_MEDIA) {
+      return 'https://nostrmedia.com';
+    } else if (uploadServer == NOSTR_CHECK) {
+      return 'https://nostrcheck.me';
+    } else if (uploadServer == VOID_CAT) {
+      return 'https://void.cat';
+    }
+
+    return 'https://nostr.build';
+  }
+
+  static String getUploadServerPath(String uploadServer) {
+    if (uploadServer == NOSTR_BUILD) {
+      return '/api/v2/nip96/upload';
+    } else if (uploadServer == NOSTR_MEDIA) {
+      return '/upload';
+    } else if (uploadServer == NOSTR_CHECK) {
+      return '/api/v2/media';
+    } else if (uploadServer == VOID_CAT) {
+      return '/n96';
+    }
+
+    return 'https://nostr.build/api/v2/nip96/upload';
   }
 }

@@ -9,16 +9,22 @@ import 'package:nostr_core/db/db_dm_info.dart';
 import 'package:nostr_core/db/db_event.dart';
 import 'package:nostr_core/db/db_event_stats.dart';
 import 'package:nostr_core/db/db_metadata.dart';
+import 'package:nostr_core/db/db_mute_list.dart';
 import 'package:nostr_core/db/db_nip05.dart';
 import 'package:nostr_core/db/db_relay_set.dart';
+import 'package:nostr_core/db/db_user_app_settings.dart';
+import 'package:nostr_core/db/db_user_drafts.dart';
 import 'package:nostr_core/db/db_user_followers.dart';
 import 'package:nostr_core/db/db_user_relay_list.dart';
+import 'package:nostr_core/db/db_user_wot.dart';
 import 'package:nostr_core/models/contact_list.dart';
 import 'package:nostr_core/models/dm_session_info.dart';
 import 'package:nostr_core/models/event_filter.dart';
 import 'package:nostr_core/models/event_stats.dart';
 import 'package:nostr_core/models/metadata.dart';
+import 'package:nostr_core/models/mute_list.dart';
 import 'package:nostr_core/models/nip05.dart';
+import 'package:nostr_core/models/wot_models.dart';
 import 'package:nostr_core/nostr/event.dart';
 import 'package:nostr_core/utils/helpers.dart';
 
@@ -37,11 +43,12 @@ class DbCacheManager extends CacheManager {
     isar = Isar.open(
       name: "nostr_core_${kDebugMode ? "debug" : "release"}",
       inspector: kDebugMode,
-      maxSizeMiB: 1024,
+      maxSizeMiB: 4096,
       compactOnLaunch: const CompactCondition(
-          minRatio: 2.0,
-          minBytes: 100 * 1024 * 1024,
-          minFileSize: 256 * 1024 * 1024),
+        minRatio: 2.0,
+        minBytes: 100 * 1024 * 1024,
+        minFileSize: 256 * 1024 * 1024,
+      ),
       directory: directory ?? Directory.systemTemp.path,
       engine: directory == Isar.sqliteInMemory
           ? IsarEngine.sqlite
@@ -56,10 +63,20 @@ class DbCacheManager extends CacheManager {
         DbDmSessionInfoSchema,
         DbEventStatsSchema,
         DbUserFollowersSchema,
+        DbUserDraftsSchema,
+        DbUserAppSettingsSchema,
+        DbUserWotSchema,
+        DbMuteListSchema,
       ],
     );
   }
 
+  double getDatabaseSizeInMb() {
+    return (isar.getSize(includeIndexes: true) / (1024 * 1024));
+  }
+
+  /// *********************************************************************************************
+  ///
   @override
   Future<void> saveUserRelayList(UserRelayList userRelayList) async {
     if (userRelayList.pubkey.isNotEmpty) {
@@ -111,6 +128,36 @@ class DbCacheManager extends CacheManager {
   }
 
   @override
+  Future<void> removeAllRelaySets() async {
+    isar.write((isar) {
+      isar.dbRelaySets.clear();
+    });
+  }
+
+  @override
+  Future<void> removeAllUserRelayLists() async {
+    isar.write((isar) {
+      isar.dbUserRelayLists.clear();
+    });
+  }
+
+  @override
+  Future<void> removeUserRelayList(String pubKey) async {
+    isar.write((isar) {
+      isar.dbUserRelayLists.delete(pubKey);
+    });
+  }
+
+  @override
+  Future<void> removeRelaySet(String name, String pubKey) async {
+    isar.write((isar) {
+      isar.dbRelaySets.delete(RelaySet.buildId(name, pubKey));
+    });
+  }
+
+  /// *********************************************************************************************
+  ///
+  @override
   ContactList? loadContactList(String pubKey) {
     return isar.dbContactLists.get(pubKey);
   }
@@ -146,30 +193,9 @@ class DbCacheManager extends CacheManager {
   }
 
   @override
-  Future<void> removeAllRelaySets() async {
-    isar.write((isar) {
-      isar.dbRelaySets.clear();
-    });
-  }
-
-  @override
   Future<void> removeAllContactLists() async {
     isar.write((isar) {
       isar.dbContactLists.clear();
-    });
-  }
-
-  @override
-  Future<void> removeAllUserRelayLists() async {
-    isar.write((isar) {
-      isar.dbUserRelayLists.clear();
-    });
-  }
-
-  @override
-  Future<void> removeRelaySet(String name, String pubKey) async {
-    isar.write((isar) {
-      isar.dbRelaySets.delete(RelaySet.buildId(name, pubKey));
     });
   }
 
@@ -180,11 +206,53 @@ class DbCacheManager extends CacheManager {
     });
   }
 
+  // *********************************************************************************************
+
   @override
-  Future<void> removeUserRelayList(String pubKey) async {
+  MuteList? loadMuteList(String pubKey) {
+    return isar.dbMuteLists.get(pubKey);
+  }
+
+  @override
+  Future<void> removeAllMuteLists() async {
     isar.write((isar) {
-      isar.dbUserRelayLists.delete(pubKey);
+      isar.dbMuteLists.clear();
     });
+  }
+
+  @override
+  Future<void> removeMuteList(String pubKey) async {
+    isar.write((isar) {
+      isar.dbMuteLists.delete(pubKey);
+    });
+  }
+
+  @override
+  Future<void> saveMuteList(MuteList muteList) async {
+    if (muteList.pubkey.isNotEmpty) {
+      isar.write(
+        (isar) {
+          isar.dbMuteLists.put(DbMuteList.fromMuteList(muteList));
+        },
+      );
+    }
+  }
+
+  @override
+  Future<void> saveMuteLists(List<MuteList> muteLists) async {
+    final validContactList = muteLists
+        .where(
+          (c) => c.pubkey.isNotEmpty,
+        )
+        .toList();
+
+    isar.write(
+      (isar) {
+        isar.dbMuteLists.putAll(
+          validContactList.map((e) => DbMuteList.fromMuteList(e)).toList(),
+        );
+      },
+    );
   }
 
   /// *********************************************************************************************
@@ -250,13 +318,21 @@ class DbCacheManager extends CacheManager {
   Iterable<Metadata> searchMetadatas(String search, int limit) {
     return isar.dbMetadatas
         .where()
-        .splitDisplayNameWordsElementStartsWith(search)
+        .splitDisplayNameWordsElementContains(search, caseSensitive: false)
         .or()
-        .splitNameWordsElementStartsWith(search)
+        .splitNameWordsElementContains(search, caseSensitive: false)
         .or()
-        .nip05Contains(search)
+        .nip05Contains(search, caseSensitive: false)
         .findAll()
         .take(limit);
+  }
+
+  @override
+  Metadata? getMetadataByNip05(String nip05) {
+    return isar.dbMetadatas
+        .where()
+        .nip05Contains(nip05, caseSensitive: false)
+        .findFirst();
   }
 
   @override
@@ -310,6 +386,34 @@ class DbCacheManager extends CacheManager {
   // *********************************************************************************************
 
   @override
+  Future<DbUserAppSettings?> loadUserAppSettings(String pubkey) async {
+    return isar.dbUserAppSettings.get(pubkey);
+  }
+
+  @override
+  Future<void> removeAllAppSettings() async {
+    isar.write((isar) {
+      isar.dbUserAppSettings.clear();
+    });
+  }
+
+  @override
+  Future<void> removeUserAppSettings(String pubkey) async {
+    isar.write((isar) {
+      isar.dbUserAppSettings.delete(pubkey);
+    });
+  }
+
+  @override
+  Future<void> saveUserAppSettings(DbUserAppSettings dbUserAppSettings) async {
+    isar.write((isar) {
+      isar.dbUserAppSettings.put(dbUserAppSettings);
+    });
+  }
+
+  // *********************************************************************************************
+
+  @override
   Future<void> removeEvent(String id) async {
     isar.write((isar) {
       isar.dbEvents.delete(id);
@@ -342,6 +446,7 @@ class DbCacheManager extends CacheManager {
   @override
   List<Event> loadEvents({
     List<String>? pubKeys,
+    List<String>? kTags,
     List<String>? ids,
     List<int>? kinds,
     List<String>? eTags,
@@ -360,6 +465,11 @@ class DbCacheManager extends CacheManager {
               .optional(
                 eTags?.isNotEmpty ?? false,
                 (q) => q.anyOf(eTags!, (q, e) => q.eTagsElementEqualTo(e)),
+              )
+              .and()
+              .optional(
+                kTags?.isNotEmpty ?? false,
+                (q) => q.anyOf(kTags!, (q, e) => q.kTagsElementEqualTo(e)),
               )
               .and()
               .optional(
@@ -382,6 +492,7 @@ class DbCacheManager extends CacheManager {
                 (q) => q.anyOf(kinds!, (q, k) => q.kindEqualTo(k)),
               ),
         )
+        .sortByCreatedAtDesc()
         .findAll();
 
     return eventFilter != null
@@ -408,12 +519,21 @@ class DbCacheManager extends CacheManager {
   }
 
   @override
-  Event? loadEvent({String? e, String? pubkey, String? pTag, int? kind}) {
+  Event? loadEvent({
+    String? e,
+    String? kTag,
+    String? pubkey,
+    String? pTag,
+    int? kind,
+  }) {
     Event? event;
 
     final evs = isar.dbEvents
         .where()
         .optional(kind != null, (q) => q.kindEqualTo(kind!))
+        .and()
+        .optional(
+            Helpers.isNotBlank(kTag), (q) => q.kTagsElementContains(kTag!))
         .and()
         .optional(Helpers.isNotBlank(e), (q) => q.eTagsElementContains(e!))
         .and()
@@ -542,6 +662,8 @@ class DbCacheManager extends CacheManager {
     });
   }
 
+  // *********************************************************************************************
+
   @override
   Future<DbUserFollowers?> loadUserFollowers(String pubkey) async {
     return isar.dbUserFollowers.get(pubkey);
@@ -568,6 +690,63 @@ class DbCacheManager extends CacheManager {
     });
   }
 
+  // *********************************************************************************************
+
+  @override
+  Future<DbUserDrafts?> loadUserDrafts(String pubkey) async {
+    return isar.dbUserDrafts.get(pubkey);
+  }
+
+  @override
+  Future<void> removeAllUserDrafts() async {
+    isar.write((isar) {
+      isar.dbUserDrafts.clear();
+    });
+  }
+
+  @override
+  Future<void> removeUserDrafts(String pubkey) async {
+    isar.write((isar) {
+      isar.dbUserDrafts.delete(pubkey);
+    });
+  }
+
+  @override
+  Future<void> saveUserDrafts(DbUserDrafts dbUserDrafts) async {
+    isar.write((isar) {
+      isar.dbUserDrafts.put(dbUserDrafts);
+    });
+  }
+
+  // *********************************************************************************************
+
+  @override
+  Future<WotModel?> loadUserWot(String pubkey) async {
+    return isar.dbUserWots.get(pubkey)?.wotModel();
+  }
+
+  @override
+  Future<void> removeAllWot() async {
+    isar.write((isar) {
+      isar.dbUserWots.clear();
+    });
+  }
+
+  @override
+  Future<void> removeUserWot(String pubkey) async {
+    isar.write((isar) {
+      isar.dbUserWots.delete(pubkey);
+    });
+  }
+
+  @override
+  Future<void> saveUserWot(WotModel wotModel) async {
+    isar.write((isar) {
+      isar.dbUserWots.put(DbUserWot.fromWotModel(wotModel));
+    });
+  }
+
+  // *********************************************************************************************
   @override
   Future<void> clearCache() async {
     Future.wait(

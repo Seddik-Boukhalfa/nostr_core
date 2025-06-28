@@ -31,6 +31,9 @@ class Filter {
   /// a list of identifiers that are referenced in a "a" tag
   List<String>? a;
 
+  /// a list of identifiers that are referenced in a "a" tag
+  List<String>? k;
+
   /// a list of identifiers that are referenced in a "q" tag
   List<String>? q;
 
@@ -56,6 +59,7 @@ class Filter {
     this.p,
     this.l,
     this.d,
+    this.k,
     this.c,
     this.a,
     this.t,
@@ -80,6 +84,7 @@ class Filter {
     t = json['#t'] == null ? null : List<String>.from(json['#t']);
     l = json['#l'] == null ? null : List<String>.from(json['#l']);
     q = json['#q'] == null ? null : List<String>.from(json['#q']);
+    k = json['#k'] == null ? null : List<String>.from(json['#k']);
     since = json['since'];
     until = json['until'];
     limit = json['limit'];
@@ -125,6 +130,9 @@ class Filter {
     if (q != null) {
       data['#q'] = q;
     }
+    if (k != null) {
+      data['#k'] = k;
+    }
     if (since != null) {
       data['since'] = since;
     }
@@ -153,6 +161,7 @@ class RemoteCacheFilter {
   final String? selector;
   final String? timeFrame;
   final String? scope;
+  final String? query;
 
   RemoteCacheFilter({
     required this.type,
@@ -168,6 +177,7 @@ class RemoteCacheFilter {
     this.timeFrame,
     this.scope,
     this.createdAfter,
+    this.query,
   });
 
   Map<String, dynamic> toMap() {
@@ -186,6 +196,7 @@ class RemoteCacheFilter {
           if (selector != null) 'selector': selector,
           if (timeFrame != null) 'timeframe': timeFrame,
           if (scope != null) 'scope': scope,
+          if (query != null) 'query': query,
           if (createdAfter != null) 'created_after': createdAfter,
         }
       ]
@@ -196,6 +207,7 @@ class RemoteCacheFilter {
     final d = data['cache'];
     final type = d[0];
     final usedInfos = d[1];
+
     return RemoteCacheFilter(
       type: type,
       eventId: usedInfos['event_id'],
@@ -210,6 +222,7 @@ class RemoteCacheFilter {
       timeFrame: usedInfos['timeframe'],
       scope: usedInfos['scope'],
       createdAfter: usedInfos['created_after'],
+      query: usedInfos['query'],
     );
   }
 }

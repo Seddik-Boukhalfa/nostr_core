@@ -50,4 +50,33 @@ class Nip05 {
 
     return false;
   }
+
+  static Future<String?> getPubkey(String nip05Address) async {
+    var name = "_";
+    var address = nip05Address;
+    var strs = nip05Address.split("@");
+    if (strs.length > 1) {
+      name = strs[0];
+      address = strs[1];
+    }
+
+    var url = "https://$address/.well-known/nostr.json?name=$name";
+
+    try {
+      Uri uri = Uri.parse(url).replace(scheme: 'https');
+
+      var response = await http.get(uri);
+
+      final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map;
+      if (data["names"] != null) {
+        return data["names"][name];
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print(e);
+      }
+    }
+
+    return null;
+  }
 }

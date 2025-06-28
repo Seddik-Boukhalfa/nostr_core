@@ -85,6 +85,23 @@ class DbEvent extends Event {
   }
 
   @override
+  List<String> get kTags {
+    List<String> kTags = super.stTags.where((element) {
+      List<dynamic> a = element;
+      if (a.isNotEmpty && a.first.toString() == "k") {
+        return true;
+      }
+
+      return false;
+    }).map((e) {
+      List<dynamic> list = e;
+      return list.length == 2 ? list[1].toString() : "";
+    }).toList();
+
+    return kTags;
+  }
+
+  @override
   List<String> get eTags {
     List<String> eTags = super.stTags.where((element) {
       List<dynamic> a = element;

@@ -7,8 +7,6 @@ import 'package:flutter/foundation.dart';
 import 'package:nostr_core/nostr/nostr.dart';
 import 'package:nostr_core/nostr/remote_cache_event.dart';
 
-import '../utils/utils.dart';
-
 typedef RemoteEventCallBack = void Function(BaseEvent event);
 
 typedef RemoteEOSECallBack = void Function(
@@ -31,7 +29,7 @@ class RemoteCacheService {
   Future<void> connectCache() async {
     try {
       cacheSocket = await WebSocket.connect(cacheUrl).timeout(
-        const Duration(seconds: 1),
+        const Duration(seconds: 5),
       );
 
       connectionStatus = 1;
@@ -40,7 +38,6 @@ class RemoteCacheService {
 
       _listenEvent();
     } catch (e) {
-      logger.i(e);
       connectionStatus = 0;
       await Future.delayed(const Duration(seconds: 5));
       await reconnect();
@@ -119,8 +116,7 @@ class RemoteCacheService {
           printLog('Received message not supported: $message');
           break;
       }
-    } catch (e, stack) {
-      logger.i(stack);
+    } catch (e, _) {
       printLog('Received message not supported: $message');
     }
   }

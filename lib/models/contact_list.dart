@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:nostr_core/nostr/event.dart';
 import 'package:nostr_core/utils/utils.dart';
+import 'package:string_validator/string_validator.dart';
 
 class ContactList {
   late String pubkey;
@@ -40,7 +41,8 @@ class ContactList {
       final length = tag.length;
       final name = tag[0];
       final contact = tag[1];
-      if (name == "p") {
+
+      if (name == "p" && isHexadecimal(contact)) {
         String relay = '';
         // String petname = '';
         if (length > 2) {

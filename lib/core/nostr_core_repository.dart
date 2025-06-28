@@ -5,16 +5,19 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:core';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
 import 'package:nostr_core/cache/cache_manager.dart';
 import 'package:nostr_core/cache/remote_cache_service.dart';
 import 'package:nostr_core/models/contact_list.dart';
 import 'package:nostr_core/models/metadata.dart';
+import 'package:nostr_core/models/mute_list.dart';
 import 'package:nostr_core/models/pubkey_mapping.dart';
 import 'package:nostr_core/models/relay_info.dart';
 import 'package:nostr_core/models/relay_set.dart';
 import 'package:nostr_core/models/user_relay_list.dart';
+import 'package:nostr_core/models/wot_models.dart';
 import 'package:nostr_core/nostr/close.dart';
 import 'package:nostr_core/nostr/event.dart';
 import 'package:nostr_core/nostr/event_signer/event_signer.dart';
@@ -27,7 +30,7 @@ import 'package:nostr_core/nostr/utils.dart';
 import 'package:nostr_core/utils/utils.dart';
 import 'package:uuid/uuid.dart';
 
-const Duration REFRESH_CONTACT_LIST_DURATION = Duration(minutes: 10);
+const Duration REFRESH_CONTACT_LIST_DURATION = Duration(days: 1);
 
 const int DEFAULT_STREAM_IDLE_TIMEOUT = 5;
 
@@ -35,14 +38,14 @@ const int DEFAULT_BEST_RELAYS_MIN_COUNT = 2;
 
 const int TIMER_TICKS = 10;
 
+const int BATCH_SIZE = 100;
+
 const Duration REFRESH_USER_RELAY_DURATION = Duration(minutes: 10);
 
 const List<String> DEFAULT_BOOTSTRAP_RELAYS = [
   "wss://relay.damus.io",
-  "wss://nos.lol",
+  "wss://relay.nostr.band",
   'wss://nostr-01.yakihonne.com',
-  'wss://nostr-02.yakihonne.com',
-  'wss://nostr-03.dorafactory.org',
 ];
 
 class NostrCore {
@@ -51,6 +54,8 @@ class NostrCore {
   RemoteCacheService remoteCacheService = RemoteCacheService(
     cacheUrl: 'wss://cache2.primal.net/v1',
   );
+
+  EventSigner? currentSigner;
 
   Uuid uuid = const Uuid();
 
@@ -76,6 +81,12 @@ class NostrCore {
 
   NostrCore({required this.cacheManager});
 
+  //************************************** Signer **************************************************************/
+
+  void setSigner(EventSigner? signer) {
+    currentSigner = signer;
+  }
+
   //************************************** Relays connectivity **************************************************************/
   @pragma('vm:entry-point')
   void relaysAutoReconnect() {
@@ -87,7 +98,7 @@ class NostrCore {
     }
   }
 
-  void forceReconnect() async {
+  Future<void> forceReconnect() async {
     remoteCacheService.reconnect();
 
     final nostrConnectRelays = List<String>.from(relays());
@@ -146,55 +157,53 @@ class NostrCore {
     return keys.map((e) => Relay.clean(e)!).toList();
   }
 
-  Future<void> connect(String r, {bool? fromIdleState}) async {
-    WebSocket? socket;
+  Future<void> connect(
+    String r, {
+    bool? fromIdleState,
+    bool? waitForAuth,
+  }) async {
+    try {
+      WebSocket? socket;
 
-    getRelayInfo(r);
+      getRelayInfo(r);
 
-    if (fromIdleState == null) {
-      if ((connectStatus[r] == 0 && webSockets[r] != null) ||
-          connectStatus[r] == 1 && webSockets[r] != null) return;
-
-      if (webSockets.containsKey(r) && webSockets[r] != null) {
-        socket = webSockets[r]!;
-        _setConnectStatus(r, socket.readyState);
-        printLog('status =  ${connectStatus[r]}');
-        if (connectStatus[r] != 3) {
+      if (fromIdleState == null) {
+        if ((connectStatus[r] == 0 && webSockets[r] != null) ||
+            connectStatus[r] == 1 && webSockets[r] != null) {
           return;
         }
+
+        if (webSockets.containsKey(r) && webSockets[r] != null) {
+          socket = webSockets[r]!;
+          _setConnectStatus(r, socket.readyState);
+          printLog('status =  ${connectStatus[r]}');
+          if (connectStatus[r] != 3) {
+            return;
+          }
+        }
       }
-    }
 
-    attempts[r] = (attempts[r] ?? 0) + 1;
-    closedRelays.remove(r);
-    webSockets[r] = null;
-    socket = await _connectWs(r);
+      attempts[r] = (attempts[r] ?? 0) + 1;
+      closedRelays.remove(r);
+      webSockets[r] = null;
+      socket = await _connectWs(r);
 
-    if (socket != null) {
-      socket.done.then((dynamic _) => _onDisconnected(r));
-      _listenEvent(socket, r);
-      webSockets[r] = socket;
-      printLog('$r socket connection initialized');
-      _setConnectStatus(r, 1);
-    } else {
-      webSockets[r] = socket;
-    }
+      if (socket != null) {
+        socket.done.then((dynamic _) => _onDisconnected(r));
+        _listenEvent(socket, r);
+        webSockets[r] = socket;
+        printLog('$r socket connection initialized');
+        _setConnectStatus(r, 1);
+        if (waitForAuth != null) {
+          await Future.delayed(const Duration(seconds: 2));
+        }
+      } else {
+        webSockets[r] = socket;
+      }
+    } catch (_) {}
   }
 
   Future<void> connectRelays(List<String> relays, {bool? fromIdleState}) async {
-    // List<String> toBeStopped = [];
-    // final nostrConnectRelays = this.relays();
-
-    // for (final relay in nostrConnectRelays) {
-    //   if (!relays.contains(relay)) {
-    //     toBeStopped.add(relay);
-    //   }
-    // }
-
-    // if (toBeStopped.isNotEmpty) {
-    //   closeConnect(toBeStopped);
-    // }
-
     final rs = relays.where((r) {
       final relay = Relay.clean(r);
       return relay != null && !this.relays().contains(relay);
@@ -446,6 +455,7 @@ class NostrCore {
     Event event,
     List<String> selectedRelays, {
     OKCallBack? sendCallBack,
+    bool isAuth = false,
   }) {
     Sends sends = Sends(
       generate64RandomHexChars(),
@@ -458,36 +468,77 @@ class NostrCore {
     sendsMap[event.id] = sends;
 
     _send(
-      event.serialize(),
+      isAuth ? event.serializeAuth() : event.serialize(),
       chosenRelays: selectedRelays.isNotEmpty ? selectedRelays : null,
     );
   }
 
   void _send(String data, {List<String>? chosenRelays}) {
-    if (chosenRelays != null) {
-      for (final relay in chosenRelays) {
-        if (webSockets.containsKey(relay)) {
-          var socket = webSockets[relay];
-          if (connectStatus[relay] == 1 && socket != null) {
-            socket.add(data);
+    try {
+      if (chosenRelays != null) {
+        for (final relay in chosenRelays) {
+          if (webSockets.containsKey(relay)) {
+            var socket = webSockets[relay];
+            if (connectStatus[relay] == 1 && socket != null) {
+              socket.add(data);
+            }
           }
         }
+      } else {
+        webSockets.forEach(
+          (url, socket) {
+            if (connectStatus[url] == 1 && socket != null) {
+              socket.add(data);
+            }
+          },
+        );
       }
-    } else {
-      webSockets.forEach(
-        (url, socket) {
-          if (connectStatus[url] == 1 && socket != null) {
-            socket.add(data);
-          }
-        },
-      );
-    }
+    } catch (_) {}
   }
 
   //*********************************** Messages and events handling ***********************************************************/
-  void _handleMessage(String message, String relay) {
+  Future<void> _authenticateRelay(String message, String relay) async {
+    final completer = Completer<void>();
+
+    if (currentSigner?.canSign() ?? false) {
+      final dm = jsonDecode(message);
+
+      if (dm is List && dm.length > 1) {
+        final ev = await Event.genEvent(
+          kind: EventKind.AUTHENTICATION,
+          tags: [
+            ['relay', Relay.clean(relay) ?? relay],
+            ['challenge', dm[1]],
+          ],
+          content: '',
+          signer: currentSigner,
+        );
+
+        if (ev != null) {
+          sendEvent(
+            ev,
+            [relay],
+            isAuth: true,
+            sendCallBack: (ok, relay, unCompletedRelays) {
+              completer.complete();
+            },
+          );
+        }
+      }
+    } else {
+      completer.complete();
+    }
+
+    return completer.future;
+  }
+
+  void _handleMessage(
+    String message,
+    String relay,
+  ) {
     try {
       var m = Message.deserialize(message);
+
       switch (m.type) {
         case 'EVENT':
           _handleEvent(m.message, relay);
@@ -501,6 +552,11 @@ class NostrCore {
         case 'OK':
           _handleOk(message, relay);
           break;
+        case 'AUTH':
+          _authenticateRelay(message, relay);
+          print(message);
+          break;
+
         default:
           printLog('Received message not supported: $message');
           break;
@@ -529,9 +585,9 @@ class NostrCore {
     if (subscriptionId.isNotEmpty && requestsMap.containsKey(requestsMapKey)) {
       var relays = requestsMap[requestsMapKey]!.relays;
       relays.remove(relay);
-      // all relays have EOSE
       EOSECallBack? callBack = requestsMap[requestsMapKey]!.eoseCallBack;
       OKEvent ok = OKEvent(subscriptionId, true, '');
+
       if (callBack != null) callBack(subscriptionId, ok, relay, relays);
     }
   }
@@ -543,7 +599,6 @@ class NostrCore {
   }
 
   void _handleOk(String message, String relay) {
-    printLog('receive ok: $message');
     OKEvent? ok = Nip20.getOk(message);
     if (ok != null && sendsMap.containsKey(ok.eventId)) {
       if (sendsMap[ok.eventId]!.okCallBack != null) {
@@ -553,37 +608,40 @@ class NostrCore {
         sendsMap[ok.eventId]!.relays = relays;
         sendsMap[ok.eventId]!.okCallBack!(ok, relay, relays);
         if (relays.isEmpty) sendsMap.remove(ok.eventId);
+        if (ok.message == "restricted: user unauthorized") {
+          closeConnect([relay]);
+        }
       }
     }
   }
 
   void _listenEvent(WebSocket socket, String relay) {
-    socket.listen((message) {
-      _handleMessage(message, relay);
-    }, onDone: () {
-      printLog('connect aborted');
-      _setConnectStatus(relay, 3);
-      if (!closedRelays.contains(relay)) {
+    try {
+      socket.listen((message) {
+        _handleMessage(message, relay);
+      }, onDone: () {
+        printLog('connect aborted');
+        _setConnectStatus(relay, 3);
+        if (!closedRelays.contains(relay)) {
+          connect(relay);
+        }
+      }, onError: (e) {
+        printLog('Server error: $e');
+        _setConnectStatus(relay, 3);
         connect(relay);
-      }
-    }, onError: (e) {
-      printLog('Server error: $e');
-      _setConnectStatus(relay, 3); // closed
-      connect(relay);
-    });
+      });
+    } catch (_) {}
   }
 
   Future _connectWs(String relay) async {
     try {
-      _setConnectStatus(relay, 0); // connecting
+      _setConnectStatus(relay, 0);
       return await WebSocket.connect(relay).timeout(
         const Duration(seconds: 5),
       );
     } catch (e) {
       _setConnectStatus(relay, 3);
       printLog('Error! can not connect WS connectWs $e');
-      // closed
-      // _retryWs(relay);
       return null;
     }
   }
@@ -666,6 +724,7 @@ class NostrCore {
           ),
         ],
         [],
+        timeOut: 2,
         eventCallBack: (event, relay) {
           if (loadedContactList == null ||
               loadedContactList!.createdAt < event.createdAt) {
@@ -688,9 +747,234 @@ class NostrCore {
         completer.complete(contactList);
       } else if (contactList != null) {
         completer.complete(contactList);
+      } else {
+        completer.complete(null);
       }
     } else {
       completer.complete(contactList);
+    }
+
+    return completer.future;
+  }
+
+  Future<MuteList?> loadMutesList(
+    String pubkey, {
+    bool forceRefresh = false,
+    int idleTimeout = DEFAULT_STREAM_IDLE_TIMEOUT,
+  }) async {
+    final completer = Completer<MuteList?>();
+
+    MuteList? muteList = cacheManager.loadMuteList(pubkey);
+
+    if (muteList == null || forceRefresh) {
+      MuteList? loadedMuteList;
+
+      final id = await doQuery(
+        [
+          Filter(
+            kinds: [EventKind.CONTACT_LIST],
+            authors: [pubkey],
+            limit: 1,
+          ),
+        ],
+        [],
+        timeOut: 2,
+        eventCallBack: (event, relay) {
+          if (loadedMuteList == null ||
+              loadedMuteList!.createdAt < event.createdAt) {
+            loadedMuteList = MuteList.fromEvent(event);
+          }
+        },
+        eoseCallBack: (requestId, ok, relay, unCompletedRelays) {},
+      );
+
+      closeRequests([id]);
+
+      if (loadedMuteList != null &&
+          (muteList == null ||
+              muteList.createdAt < loadedMuteList!.createdAt)) {
+        loadedMuteList!.loadedTimestamp =
+            DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+        await cacheManager.saveMuteList(loadedMuteList!);
+        muteList = loadedMuteList;
+        completer.complete(muteList);
+      } else if (muteList != null) {
+        completer.complete(muteList);
+      } else {
+        completer.complete(null);
+      }
+    } else {
+      completer.complete(muteList);
+    }
+
+    return completer.future;
+  }
+
+// Modified calculateWot function using isolates
+  Future<Map<String, double>> calculateWot({
+    required String pubkey,
+    required Set<String> mutes,
+    bool forceRefresh = false,
+  }) async {
+    final currentWot = await cacheManager.loadUserWot(pubkey);
+
+    if (currentWot != null && !forceRefresh) {
+      return currentWot.wot;
+    }
+
+    const int batchSize = 50;
+    final Map<String, Set<String>> followings = {};
+
+    // Load the main contact list - make sure to extract just the data
+    final contactList = await loadContactList(pubkey);
+    final cs = Set<String>.from(contactList?.contacts ?? []);
+
+    if (cs.isEmpty) {
+      return {};
+    }
+
+    // Prepare all the data before spawning isolate to avoid closure issues
+    // Load followings' contact lists in batches
+
+    final csList = cs.toList();
+    for (var i = 0; i < csList.length; i += batchSize) {
+      final batch = csList.sublist(
+        i,
+        i + batchSize < csList.length ? i + batchSize : csList.length,
+      );
+
+      // Make sure we're only getting serializable data
+      final followingsContactList = await loadContactListByBatch(batch);
+
+      // Create a deep copy to avoid any database references
+      for (final key in followingsContactList.keys) {
+        followings[key] = Set<String>.from(followingsContactList[key] ?? []);
+      }
+    }
+
+    // Create a calculation data object containing only serializable data
+    final calculationData = WotCalculationData(
+      pubkey: pubkey,
+      mutes: Set<String>.from(mutes),
+      followings: Map<String, Set<String>>.from(followings),
+      contacts: cs,
+    );
+
+    // Serialize the data completely before spawning the isolate
+    final serializedData = calculationData.toJson();
+
+    // Spawn isolate for WoT calculation using a top-level function
+    final receivePort = ReceivePort();
+    final isolate = await Isolate.spawn(
+      calculateWotIsolate,
+      receivePort.sendPort,
+    );
+
+    try {
+      final sendPort = await receivePort.first as SendPort;
+
+      final completer = Completer<Map<String, double>>();
+
+      final responsePort = ReceivePort();
+
+      responsePort.listen(
+        (message) {
+          if (message is Map<String, dynamic>) {
+            if (message.containsKey('error')) {
+              logger.e('Error in isolate: ${message['error']}');
+              completer.complete({});
+            } else {
+              cacheManager.saveUserWot(
+                WotModel(
+                  pubkey: pubkey,
+                  wot: Map<String, double>.from(message),
+                  createdAt: DateTime.now().toSecondsSinceEpoch(),
+                ),
+              );
+
+              completer.complete(message.cast<String, double>());
+            }
+            responsePort.close();
+            isolate.kill(priority: Isolate.immediate);
+          }
+        },
+      );
+
+      sendPort.send({...serializedData, 'responsePort': responsePort.sendPort});
+
+      return await completer.future;
+    } catch (e) {
+      logger.e('Error in WoT calculation: $e');
+      return {};
+    } finally {
+      isolate.kill(priority: Isolate.immediate);
+      receivePort.close();
+    }
+  }
+
+// Placeholder for loadContactListByBatch
+  Future<Map<String, List<String>>> loadContactListByBatch(
+    List<String> pubkeys, {
+    bool forceRefresh = false,
+    int idleTimeout = 5000,
+  }) async {
+    final completer = Completer<Map<String, List<String>>>();
+    Map<String, List<String>> contactsList = {};
+    Map<String, List<String>> mutesList = {};
+
+    List<String> remainingContactsPubkeys = List.from(pubkeys);
+    List<String> remainingMutesPubkeys = List.from(pubkeys);
+
+    for (final pubkey in pubkeys) {
+      final contactList = cacheManager.loadContactList(pubkey);
+      final muteList = cacheManager.loadMuteList(pubkey);
+
+      if (contactList != null) {
+        contactsList[pubkey] = contactList.contacts;
+        remainingContactsPubkeys.remove(pubkey);
+      }
+
+      if (muteList != null) {
+        mutesList[pubkey] = muteList.mutes;
+        remainingMutesPubkeys.remove(pubkey);
+      }
+    }
+
+    if (remainingContactsPubkeys.isNotEmpty ||
+        remainingMutesPubkeys.isNotEmpty) {
+      final id = await doQuery(
+        [
+          if (remainingContactsPubkeys.isNotEmpty)
+            Filter(
+              kinds: [EventKind.CONTACT_LIST],
+              authors: remainingContactsPubkeys,
+            ),
+          if (remainingMutesPubkeys.isNotEmpty)
+            Filter(
+              kinds: [EventKind.MUTE_LIST],
+              authors: remainingMutesPubkeys,
+            ),
+        ],
+        [],
+        timeOut: 2,
+        eventCallBack: (event, relay) {
+          if (contactsList[event.pubkey] == null) {
+            contactsList[event.pubkey] = ContactList.fromEvent(event).contacts;
+          }
+
+          if (mutesList[event.pubkey] == null) {
+            mutesList[event.pubkey] = MuteList.fromEvent(event).mutes;
+          }
+        },
+        eoseCallBack: (requestId, ok, relay, unCompletedRelays) {},
+      );
+
+      closeRequests([id]);
+
+      completer.complete(contactsList);
+    } else {
+      completer.complete(contactsList);
     }
 
     return completer.future;
@@ -777,6 +1061,7 @@ class NostrCore {
     List<String> pubkeys,
     List<String> relays,
     EventSigner signer,
+    Set<String> mutes,
   ) async {
     ContactList contactList = await ensureUpToDateContactListOrEmpty(signer);
 
@@ -810,6 +1095,11 @@ class NostrCore {
       );
 
       if (isSuccessful) {
+        calculateWot(
+          pubkey: signer.getPublicKey(),
+          mutes: mutes,
+          forceRefresh: true,
+        );
         await cacheManager.saveContactList(contactList);
       } else {
         return null;
@@ -823,7 +1113,7 @@ class NostrCore {
   Future<List<Metadata>> loadMissingMetadatas(
     List<String> pubKeys,
     List<String> relays, {
-    Function? onRefresh,
+    Function(Set<String>)? onRefresh,
     bool? forceSeach,
   }) async {
     List<String> missingPubKeys = [];
@@ -850,13 +1140,19 @@ class NostrCore {
         eventCallBack: (event, relay) async {
           if (metadatas[event.pubkey] == null ||
               metadatas[event.pubkey]!.createdAt < event.createdAt) {
-            metadatas[event.pubkey] = Metadata.fromEvent(event);
-            metadatas[event.pubkey]!.refreshedTimestamp = Helpers.now;
-            await cacheManager.saveMetadata(metadatas[event.pubkey]!);
+            final m = Metadata.fromEvent(event);
+
+            if (m != null) {
+              metadatas[event.pubkey] = m.copyWith(
+                refreshedTimestamp: Helpers.now,
+              );
+
+              await cacheManager.saveMetadata(metadatas[event.pubkey]!);
+            }
           }
         },
         eoseCallBack: (p0, p1, p2, p3) {
-          onRefresh?.call();
+          onRefresh?.call(metadatas.keys.toSet());
         },
       );
 
@@ -878,11 +1174,14 @@ class NostrCore {
       final isSuccessful = await publish(event, relays, onProgress: onProgress);
 
       if (isSuccessful) {
-        metadata.createdAt = Helpers.now;
-        metadata.refreshedTimestamp = Helpers.now;
-        await cacheManager.saveMetadata(metadata);
+        final newMetadata = metadata.copyWith(
+          createdAt: Helpers.now,
+          refreshedTimestamp: Helpers.now,
+        );
 
-        return metadata;
+        await cacheManager.saveMetadata(newMetadata);
+
+        return newMetadata;
       }
 
       return null;
@@ -988,6 +1287,10 @@ class NostrCore {
           minimumRelaysCoverageByPubkey[pubKey.pubKey] == null ||
           minimumRelaysCoverageByPubkey[pubKey.pubKey]!.length <
               relayMinCountPerPubKey)) {
+        continue;
+      }
+
+      if (url.contains('wot')) {
         continue;
       }
 
@@ -1297,108 +1600,6 @@ class NostrCore {
       }
     }
   }
-
-// //********************************************** Nip 51 lists *************************************************************/\
-//   Future<Nip51List?> getCachedNip51List(
-//     int kind,
-//   ) async {
-//     List<Event>? events = cacheManager.loadEvents(
-//       pubKeys: [signer.getPublicKey()],
-//       kinds: [kind],
-//     );
-
-//     events.sort(
-//       (a, b) => b.createdAt.compareTo(a.createdAt),
-//     );
-//     return events.isNotEmpty
-//         ? await Nip51List.fromEvent(events.first, signer)
-//         : null;
-//   }
-
-//   Future<Nip51List?> getSingleNip51List(
-//     int kind,
-//     EventSigner signer,
-//     List<String> relays, {
-//     String? dTag,
-//     bool forceRefresh = false,
-//     int timeout = 5,
-//   }) async {
-//     Nip51List? list =
-//         !forceRefresh ? await getCachedNip51List(kind, signer) : null;
-//     if (list == null) {
-//       Nip51List? refreshedList;
-
-//       await doQuery(
-//         [
-//           Filter(
-//             authors: [signer.getPublicKey()],
-//             kinds: [kind],
-//           ),
-//         ],
-//         relays,
-//         eventCallBack: (event, relay) async {
-//           switch (event.kind) {
-//             case EventKind.RELAY_LIST_METADATA:
-//               if (refreshedList == null ||
-//                   refreshedList!.createdAt <= event.createdAt) {
-//                 refreshedList = await Nip51List.fromEvent(event, signer);
-
-//                 await cacheManager.saveEvent(event);
-//               }
-//           }
-//         },
-//       );
-
-//       return refreshedList;
-//     }
-
-//     return list;
-//   }
-// }
-
-// Future<List<Nip51List>> getNip51List(
-//   List<int> kinds,
-//   List<String> relays, {
-//   String? dTag,
-//   bool forceRefresh = false,
-//   int timeout = 5,
-// }) async {
-//   List<Nip51List> lists = [];
-
-//   for (final kind in kinds) {
-//     Nip51List? list =
-//         !forceRefresh ? await getCachedNip51List(kind, signer) : null;
-//   }
-
-//   if (list == null) {
-//     Nip51List? refreshedList;
-
-//     await doQuery(
-//       [
-//         Filter(
-//           authors: [signer.getPublicKey()],
-//           kinds: [kind],
-//         ),
-//       ],
-//       relays,
-//       eventCallBack: (event, relay) async {
-//         switch (event.kind) {
-//           case EventKind.RELAY_LIST_METADATA:
-//             if (refreshedList == null ||
-//                 refreshedList!.createdAt <= event.createdAt) {
-//               refreshedList = await Nip51List.fromEvent(event, signer);
-
-//               await cacheManager.saveEvent(event);
-//             }
-//         }
-//       },
-//     );
-
-//     return refreshedList;
-//   }
-
-//   return list;
-// }
 }
 
 typedef NoticeCallBack = void Function(String notice, String relay);
@@ -1446,5 +1647,70 @@ class Requests {
     this.subscriptions,
     this.eventCallBack,
     this.eoseCallBack,
+  );
+}
+
+@pragma('vm:entry-point')
+void calculateWotIsolate(SendPort sendPort) {
+  final receivePort = ReceivePort();
+  sendPort.send(receivePort.sendPort);
+
+  receivePort.listen(
+    (message) {
+      if (message is Map<String, dynamic>) {
+        try {
+          final wot = <String, double>{};
+          final cs = Set<String>.from(message['contacts']);
+          final followings =
+              Map<String, Set<String>>.from(message['followings']);
+          final mutes = Set<String>.from(message['mutes']);
+          final sp = message['responsePort'] as SendPort;
+
+          for (final p in cs) {
+            if (!mutes.contains(p)) {
+              int count = 0;
+              for (final f in followings.values) {
+                if (f.contains(p)) {
+                  count++;
+                }
+              }
+
+              final score = cs.isNotEmpty ? (count * 10) / cs.length : 0.0;
+              if (score >= 5) wot[p] = score.clamp(0, 10);
+            }
+          }
+
+          for (final f in followings.values) {
+            if (f.isNotEmpty) {
+              for (final p in f) {
+                if (!mutes.contains(p) && !wot.containsKey(p)) {
+                  int count = 0;
+                  for (final f2 in followings.values) {
+                    if (f2.contains(p)) {
+                      count++;
+                    }
+                  }
+
+                  final score = cs.isNotEmpty ? (count * 10) / cs.length : 0.0;
+                  if (score >= 5) wot[p] = score.clamp(0, 10);
+                }
+              }
+            }
+          }
+
+          final sortedEntries = wot.entries.toList()
+            ..sort((a, b) => b.value.compareTo(a.value));
+
+          final result = Map<String, double>.fromEntries(
+            sortedEntries.take(100),
+          );
+
+          sp.send(result);
+        } catch (e) {
+          // Send back the error as a string
+          sendPort.send({'error': e.toString()});
+        }
+      }
+    },
   );
 }

@@ -1,27 +1,32 @@
 // ignore_for_file: public_member_api_docs, sort_constructors_first
 import 'dart:convert';
 
+import 'package:convert/convert.dart';
 import 'package:equatable/equatable.dart';
+import 'package:nostr_core/nostr/nips/nip_019.dart';
 
 ///Parameterized Replaceable Events
 class Nip33 {
-  //["a", "<kind>:<pubkey>:<d-identifier>", "<relay url>"]
-  static EventCoordinates getEventCoordinates(List<String> tag) {
-    if (tag[0] == 'a') {
-      List<dynamic> parts = tag[1].split(':');
-      int kind = int.parse(parts[0]);
-      String pubkey = parts[1];
-      String identifier = '';
+  static EventCoordinates? getEventCoordinates(List<String> tag) {
+    try {
+      if (tag[0] == 'a') {
+        List<dynamic> parts = tag[1].split(':');
+        int kind = int.parse(parts[0]);
+        String pubkey = parts[1];
+        String identifier = '';
 
-      for (int i = 2; i < parts.length; i++) {
-        identifier = identifier + parts[i];
+        for (int i = 2; i < parts.length; i++) {
+          identifier = identifier + parts[i];
+        }
+
+        String? relay;
+        if (tag.length > 2) relay = tag[2];
+        return EventCoordinates(kind, pubkey, identifier, relay);
+      } else {
+        return null;
       }
-
-      String? relay;
-      if (tag.length > 2) relay = tag[2];
-      return EventCoordinates(kind, pubkey, identifier, relay);
-    } else {
-      throw Exception("not a 'a' tag");
+    } catch (e) {
+      return null;
     }
   }
 
@@ -31,6 +36,51 @@ class Nip33 {
       '${eventCoordinates.kind}:${eventCoordinates.pubkey}:${eventCoordinates.identifier}',
       eventCoordinates.relay ?? ''
     ];
+  }
+
+  static List<EventCoordinates> getEventCoordinatesFromNaddr(
+    List<String> naddr,
+  ) {
+    List<EventCoordinates> coordinates = [];
+
+    for (final addr in naddr) {
+      try {
+        final decodedNaddr = Nip19.decodeShareableEntity(addr);
+        final kind = decodedNaddr['kind'] as int?;
+        final hexCode = hex.decode(decodedNaddr['special']);
+        final special = String.fromCharCodes(hexCode);
+        final pubkey = decodedNaddr['author'] as String?;
+
+        if (kind != null && pubkey != null && special.isNotEmpty) {
+          coordinates.add(
+            EventCoordinates(kind, pubkey, special, null),
+          );
+        }
+      } catch (_) {
+        continue;
+      }
+    }
+
+    return coordinates;
+  }
+
+  static List<List<String>> coordinatesToTagsWithMentions(
+    List<EventCoordinates> eventCoordinates,
+  ) {
+    List<List<String>> tags = [];
+
+    for (final ec in eventCoordinates) {
+      tags.add(
+        [
+          'a',
+          '${ec.kind}:${ec.pubkey}:${ec.identifier}',
+          ec.relay ?? '',
+          'mention',
+        ],
+      );
+    }
+
+    return tags;
   }
 }
 

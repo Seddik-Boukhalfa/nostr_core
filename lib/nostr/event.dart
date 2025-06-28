@@ -3,9 +3,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:convert/convert.dart';
-import 'package:nostr_core/nostr/event_signer/event_signer.dart';
+import 'package:nostr_core/nostr/nostr.dart';
 import 'package:nostr_core/nostr/remote_cache_event.dart';
-import 'package:nostr_core/nostr/utils.dart';
 import 'package:pointycastle/export.dart';
 
 import '../utils/static_properties.dart';
@@ -81,6 +80,36 @@ class Event implements BaseEvent {
     return reply ?? root;
   }
 
+  String? getCustomEmojiUrl(String emoji) {
+    String? url;
+
+    final e = emoji.replaceAll(':', '');
+
+    for (final tag in stTags) {
+      if (tag.first == 'emoji' && tag.length > 2 && tag[1] == e) {
+        url = tag[2];
+      }
+    }
+
+    return url;
+  }
+
+  MapEntry<String, bool>? getQtag() {
+    MapEntry<String, bool>? q;
+
+    for (final tag in stTags) {
+      if (tag.length >= 2 && tag.first == 'q') {
+        if (tag[1].contains(':')) {
+          q = MapEntry(tag[1].split(':').last, true);
+        } else {
+          q = MapEntry(tag[1], false);
+        }
+      }
+    }
+
+    return q;
+  }
+
   bool isUncensoredNote() {
     bool isUncensoredNote = false;
 
@@ -115,7 +144,7 @@ class Event implements BaseEvent {
         var value = e[1];
 
         if (key == tag) {
-          tags.add(value.toString().trim().toLowerCase());
+          tags.add(value.toString());
         }
       }
     }
@@ -133,12 +162,20 @@ class Event implements BaseEvent {
     return sTags.isEmpty ? null : sTags.first;
   }
 
+  List<String> get aTags {
+    return getTags(stTags, "a");
+  }
+
   List<String> get tTags {
     return getTags(stTags, "t");
   }
 
   List<String> get pTags {
     return getTags(stTags, "p");
+  }
+
+  List<String> get kTags {
+    return getTags(stTags, "k");
   }
 
   List<String> get eTags {
@@ -217,6 +254,16 @@ class Event implements BaseEvent {
     );
   }
 
+  String getNEvent() {
+    return Nip19.encodeShareableEntity(
+      'nevent',
+      id,
+      [],
+      pubkey,
+      kind,
+    );
+  }
+
   factory Event.withoutSignature({
     int createdAt = 0,
     required int kind,
@@ -260,6 +307,7 @@ class Event implements BaseEvent {
     var tags = (json['tags'] as List<dynamic>)
         .map((e) => (e as List<dynamic>).map((e) => e as String).toList())
         .toList();
+
     return Event(
       json['id'],
       json['pubkey'],
@@ -319,6 +367,14 @@ class Event implements BaseEvent {
       return jsonEncode(['EVENT', subscriptionId, toJson()]);
     } else {
       return jsonEncode(['EVENT', toJson()]);
+    }
+  }
+
+  String serializeAuth() {
+    if (subscriptionId != null) {
+      return jsonEncode(['AUTH', subscriptionId, toJson()]);
+    } else {
+      return jsonEncode(['AUTH', toJson()]);
     }
   }
 

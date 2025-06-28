@@ -1,4 +1,5 @@
 import 'package:nostr_core/models/metadata.dart';
+import 'package:nostr_core/nostr/event.dart';
 import 'package:nostr_core/nostr/event_signer/event_signer.dart';
 import 'package:nostr_core/utils/string_utils.dart';
 
@@ -22,7 +23,7 @@ class ZapAction {
   }) async {
     String invoice = '';
     try {
-      var invoiceCode = await _doGenInvoiceCode(
+      final res = await _doGenInvoiceCode(
         sats,
         metadata,
         signer,
@@ -34,16 +35,16 @@ class ZapAction {
         aTag: aTag,
       );
 
-      if (StringUtil.isBlank(invoiceCode)) {
+      if (res == null) {
         return;
       }
 
-      invoice = invoiceCode!;
+      invoice = res.key;
 
       bool sendWithWallet = false;
 
       if (!sendWithWallet) {
-        await LightningUtil.goToPay(invoiceCode, specifiedWallet!);
+        await LightningUtil.goToPay(res.key, specifiedWallet!);
       }
     } finally {
       onZapped(invoice);
@@ -65,7 +66,7 @@ class ZapAction {
     }
   }
 
-  static Future<String?> genInvoiceCode(
+  static Future<MapEntry<String, Event?>?> genInvoiceCode(
     num sats,
     Metadata user,
     EventSigner signer,
@@ -94,7 +95,7 @@ class ZapAction {
     }
   }
 
-  static Future<String?> _doGenInvoiceCode(
+  static Future<MapEntry<String, Event?>?> _doGenInvoiceCode(
     num sats,
     Metadata metadata,
     EventSigner signer,
@@ -105,49 +106,54 @@ class ZapAction {
     String? comment,
     bool? removeNostrEvent,
   }) async {
-    String? lnurl = metadata.lud06;
-    String? lud16Link;
+    try {
+      String? lnurl = metadata.lud06;
+      String? lud16Link;
 
-    if (StringUtil.isBlank(lnurl) || !lnurl.toLowerCase().startsWith('lnurl')) {
-      if (StringUtil.isNotBlank(metadata.lud16)) {
-        lnurl = Zap.getLnurlFromLud16(metadata.lud16);
-      } else {
-        lnurl = '';
+      if (StringUtil.isBlank(lnurl) ||
+          !lnurl.toLowerCase().startsWith('lnurl')) {
+        if (StringUtil.isNotBlank(metadata.lud16)) {
+          lnurl = Zap.getLnurlFromLud16(metadata.lud16);
+        } else {
+          lnurl = '';
+        }
       }
-    }
 
-    if (StringUtil.isBlank(lnurl)) {
+      if (StringUtil.isBlank(lnurl)) {
+        return null;
+      }
+
+      if (lnurl!.contains('@')) {
+        lnurl = Zap.getLnurlFromLud16(metadata.lud06);
+      }
+
+      if (StringUtil.isBlank(lud16Link)) {
+        if (StringUtil.isNotBlank(metadata.lud16)) {
+          lud16Link = Zap.getLud16LinkFromLud16(metadata.lud16);
+        }
+      }
+
+      if (StringUtil.isBlank(lud16Link)) {
+        if (StringUtil.isNotBlank(lnurl)) {
+          lud16Link = Zap.decodeLud06Link(lnurl!);
+        }
+      }
+
+      return await Zap.getInvoiceCode(
+        lnurl: lnurl!,
+        lud16Link: lud16Link!,
+        sats: sats,
+        recipientPubkey: metadata.pubkey,
+        relays: relays,
+        signer: signer,
+        eventId: eventId,
+        aTag: aTag,
+        pollOption: pollOption,
+        comment: comment,
+        removeNostrEvent: removeNostrEvent,
+      );
+    } catch (_) {
       return null;
     }
-
-    if (lnurl!.contains('@')) {
-      lnurl = Zap.getLnurlFromLud16(metadata.lud06);
-    }
-
-    if (StringUtil.isBlank(lud16Link)) {
-      if (StringUtil.isNotBlank(metadata.lud16)) {
-        lud16Link = Zap.getLud16LinkFromLud16(metadata.lud16);
-      }
-    }
-
-    if (StringUtil.isBlank(lud16Link)) {
-      if (StringUtil.isNotBlank(lnurl)) {
-        lud16Link = Zap.decodeLud06Link(lnurl!);
-      }
-    }
-
-    return await Zap.getInvoiceCode(
-      lnurl: lnurl!,
-      lud16Link: lud16Link!,
-      sats: sats,
-      recipientPubkey: metadata.pubkey,
-      relays: relays,
-      signer: signer,
-      eventId: eventId,
-      aTag: aTag,
-      pollOption: pollOption,
-      comment: comment,
-      removeNostrEvent: removeNostrEvent,
-    );
   }
 }

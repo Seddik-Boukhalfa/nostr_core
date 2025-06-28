@@ -7,23 +7,24 @@ import 'package:nostr_core/nostr/nostr.dart';
 import 'package:nostr_core/utils/extensions.dart';
 import 'package:nostr_core/utils/helpers.dart';
 import 'package:nostr_core/utils/static_properties.dart';
+import 'package:string_validator/string_validator.dart';
 
 class Metadata {
-  String pubkey;
-  String name;
-  String displayName;
-  String picture;
-  String banner;
-  String website;
-  String about;
-  String nip05;
-  String lud16;
-  String lud06;
-  int createdAt;
-  bool isDeleted;
-  int? refreshedTimestamp;
+  final String pubkey;
+  final String name;
+  final String displayName;
+  final String picture;
+  final String banner;
+  final String website;
+  final String about;
+  final String nip05;
+  final String lud16;
+  final String lud06;
+  final int createdAt;
+  final bool isDeleted;
+  final int? refreshedTimestamp;
 
-  Metadata({
+  const Metadata({
     required this.pubkey,
     required this.name,
     required this.displayName,
@@ -50,7 +51,7 @@ class Metadata {
 
     return Metadata(
       pubkey: pubkey ?? '',
-      name: displayName.isNotEmpty ? displayName : name,
+      name: name.isEmpty ? displayName : name,
       displayName: displayName,
       about: map['about'] as String? ?? '',
       picture: map['picture'] as String? ?? '',
@@ -107,13 +108,34 @@ class Metadata {
     return jsonEncode(toMap());
   }
 
-  static Metadata fromEvent(Event event) {
-    return Metadata.fromMap(
-      jsonDecode(event.content),
-      createdAt: event.createdAt,
-      pubkey: event.pubkey,
-      tags: event.stTags,
+  factory Metadata.empty() {
+    return const Metadata(
+      picture: '',
+      name: '',
+      about: '',
+      pubkey: '',
+      banner: '',
+      displayName: '',
+      lud16: '',
+      nip05: '',
+      lud06: '',
+      website: '',
+      isDeleted: false,
+      createdAt: 968739627,
     );
+  }
+
+  static Metadata? fromEvent(Event event) {
+    try {
+      return Metadata.fromMap(
+        jsonDecode(event.content),
+        createdAt: event.createdAt,
+        pubkey: event.pubkey,
+        tags: event.stTags,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<Event?> toEvent(EventSigner signer) async {
@@ -126,6 +148,24 @@ class Metadata {
   }
 
   String getName() {
+    if (Helpers.isNotBlank(name)) {
+      return name;
+    }
+
+    if (Helpers.isNotBlank(displayName)) {
+      return displayName;
+    }
+
+    final pub = Nip19.encodePubkey(pubkey);
+
+    final p = pub.length <= 7
+        ? pub
+        : '${pub.substring(1, 7)}...${pub.substring(pub.length - 7, pub.length)}';
+
+    return p;
+  }
+
+  String getDisplayName() {
     if (Helpers.isNotBlank(displayName)) {
       return displayName;
     }
@@ -136,7 +176,33 @@ class Metadata {
 
     final pub = Nip19.encodePubkey(pubkey);
 
-    return '${pub.substring(1, 7)}...${pub.substring(pub.length - 7, pub.length)}';
+    final p = pub.length <= 7
+        ? pub
+        : '${pub.substring(1, 7)}...${pub.substring(pub.length - 7, pub.length)}';
+
+    return p;
+  }
+
+  String? getLightningAddress() {
+    String? lightingAddress;
+
+    if (lud16.isNotEmpty) {
+      if (isEmail(lud16)) {
+        lightingAddress = lud16;
+      } else if (lud06.toLowerCase().startsWith('lnurl')) {
+        lightingAddress = Zap.getLud16FromLud06(lud16);
+      }
+    }
+
+    if (lud06.isNotEmpty && lightingAddress == null) {
+      if (isEmail(lud06)) {
+        lightingAddress = lud06;
+      } else if (lud06.toLowerCase().startsWith('lnurl')) {
+        lightingAddress = Zap.getLud16FromLud06(lud06);
+      }
+    }
+
+    return lightingAddress;
   }
 
   bool isMetadataDeleted() {
@@ -192,7 +258,23 @@ class Metadata {
       lud06: lud06 ?? this.lud06,
       createdAt: createdAt ?? this.createdAt,
       isDeleted: isDeleted ?? this.isDeleted,
-      refreshedTimestamp: refreshedTimestamp ?? this.refreshedTimestamp,
+      refreshedTimestamp: refreshedTimestamp,
     );
   }
+
+  // @override
+  // List<dynamic> get props => [
+  //       pubkey,
+  //       name,
+  //       displayName,
+  //       picture,
+  //       banner,
+  //       website,
+  //       about,
+  //       nip05,
+  //       lud16,
+  //       lud06,
+  //       createdAt,
+  //       isDeleted,
+  //     ];
 }

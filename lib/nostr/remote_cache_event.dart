@@ -9,6 +9,13 @@ class RemoteCacheEventsType {
   static const feed = 'feed';
   static const explore = 'explore';
   static const popularNotes = 'user_profile_scored_content';
+  static const trendingUsers24 = 'scored_users_24h';
+  static const scored = 'scored';
+  static const search = 'search';
+}
+
+class RemoteCacheEventsSelector {
+  static const trending1H = 'trending_1h';
 }
 
 class RemoteCacheEventKind {

@@ -1,3 +1,4 @@
+// ignore_for_file: public_member_api_docs, sort_constructors_first
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -27,6 +28,18 @@ class RelayInfo {
   final String version;
 
   final String url;
+
+  RelayInfo({
+    required this.name,
+    required this.description,
+    required this.pubKey,
+    required this.contact,
+    required this.nips,
+    required this.software,
+    required this.icon,
+    required this.version,
+    required this.url,
+  });
 
   RelayInfo._(
     this.url,
@@ -88,4 +101,34 @@ class RelayInfo {
       return null;
     }
   }
+
+  Map<String, dynamic> toMap() {
+    return <String, dynamic>{
+      'name': name,
+      'description': description,
+      'pubKey': pubKey,
+      'contact': contact,
+      'nips': nips,
+      'software': software,
+      'icon': icon,
+      'version': version,
+      'url': url,
+    };
+  }
+
+  factory RelayInfo.fromMap(Map<String, dynamic> map) {
+    return RelayInfo(
+      name: map['name'] as String,
+      description: map['description'] as String,
+      pubKey: map['pubKey'] as String,
+      contact: map['contact'] as String,
+      nips: List<dynamic>.from((map['nips'] as List<dynamic>)),
+      software: map['software'] as String,
+      icon: map['icon'] as String,
+      version: map['version'] as String,
+      url: map['url'] as String,
+    );
+  }
+
+  String toJson() => json.encode(toMap());
 }

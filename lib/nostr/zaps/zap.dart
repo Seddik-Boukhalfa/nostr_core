@@ -91,7 +91,7 @@ class Zap {
     }
   }
 
-  static Future<String?> getInvoiceCode({
+  static Future<MapEntry<String, Event?>?> getInvoiceCode({
     required String lnurl,
     required String lud16Link,
     required num sats,
@@ -134,6 +134,8 @@ class Zap {
       }
     }
 
+    Event? event;
+
     if ((removeNostrEvent == null || !removeNostrEvent) &&
         recipientPubkey.isNotEmpty) {
       var tags = [
@@ -155,7 +157,7 @@ class Zap {
         tags.add(['poll_option', pollOption!]);
       }
 
-      var event = await Event.genEvent(
+      event = await Event.genEvent(
         kind: EventKind.ZAP_REQUEST,
         tags: tags,
         content: eventContent,
@@ -178,7 +180,7 @@ class Zap {
         jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
 
     if (StringUtil.isNotBlank(responseMap['pr'])) {
-      return responseMap['pr'];
+      return MapEntry(responseMap['pr'], event);
     }
 
     return null;

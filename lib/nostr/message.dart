@@ -26,6 +26,7 @@ class Message {
       'OK',
       'AUTH'
     ];
+
     assert(messages.contains(data[0]), 'Unsupported payload (or NIP)');
 
     type = data[0];

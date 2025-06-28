@@ -55,35 +55,48 @@ class Nip4 {
   }
 
   static String decryptWithAgreement(
-      String message, ECDHBasicAgreement agreement, String publicKey) {
-    var strs = message.split("?iv=");
-    if (strs.length != 2) {
-      return "";
-    }
-    message = strs[0];
-    var iv = strs[1];
-    var ivData = base64.decode(iv);
+    String message,
+    ECDHBasicAgreement agreement,
+    String publicKey,
+  ) {
+    try {
+      var strs = message.split("?iv=");
+      if (strs.length != 2) {
+        return "";
+      }
+      message = strs[0];
+      var iv = strs[1];
+      var ivData = base64.decode(iv);
 
-    var pubKey = getPubKey(publicKey);
-    var agreementD0 = agreement.calculateAgreement(pubKey);
-    var encryptKey = agreementD0.toRadixString(16).padLeft(64, "0");
+      var pubKey = getPubKey(publicKey);
+      var agreementD0 = agreement.calculateAgreement(pubKey);
+      var encryptKey = agreementD0.toRadixString(16).padLeft(64, "0");
 
-    // var encrypter = Encrypter(AES(
-    //     Key(Uint8List.fromList(hex.decode(encryptKey))),
-    //     mode: AESMode.cbc));
-    // return encrypter.decrypt(Encrypted.from64(message), iv: IV.fromBase64(iv));
+      // var encrypter = Encrypter(AES(
+      //     Key(Uint8List.fromList(hex.decode(encryptKey))),
+      //     mode: AESMode.cbc));
+      // return encrypter.decrypt(Encrypted.from64(message), iv: IV.fromBase64(iv));
 
-    final cipherCbc =
-        PaddedBlockCipherImpl(PKCS7Padding(), CBCBlockCipher(AESEngine()));
-    final paramsCbc = PaddedBlockCipherParameters(
+      final cipherCbc =
+          PaddedBlockCipherImpl(PKCS7Padding(), CBCBlockCipher(AESEngine()));
+      final paramsCbc = PaddedBlockCipherParameters(
         ParametersWithIV(
-            KeyParameter(Uint8List.fromList(hex.decode(encryptKey))), ivData),
-        null);
-    cipherCbc.init(false, paramsCbc);
+            KeyParameter(
+              Uint8List.fromList(
+                hex.decode(encryptKey),
+              ),
+            ),
+            ivData),
+        null,
+      );
+      cipherCbc.init(false, paramsCbc);
 
-    var result = cipherCbc.process(base64.decode(message));
+      var result = cipherCbc.process(base64.decode(message));
 
-    return utf8.decode(result);
+      return utf8.decode(result);
+    } catch (_) {
+      return '';
+    }
   }
 
   static ECPublicKey getPubKey(String pk) {

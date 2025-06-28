@@ -1,5 +1,9 @@
 import 'dart:math';
 
+import 'package:uuid/uuid.dart';
+
+const uuid = Uuid();
+
 class StringUtil {
   static bool isNotBlank(String? str) {
     if (str != null && str != '') {

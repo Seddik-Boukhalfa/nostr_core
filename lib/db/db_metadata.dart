@@ -12,7 +12,7 @@ class DbMetadata extends Metadata {
 
   List<String>? get splitNameWords => name.trim().toLowerCase().split(" ");
 
-  DbMetadata({
+  const DbMetadata({
     required super.pubkey,
     required super.name,
     required super.displayName,
