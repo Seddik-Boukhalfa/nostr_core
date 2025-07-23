@@ -29,7 +29,7 @@ class Nip17 {
           receiver,
           kind: kind?.toString(),
           expiration: expiration,
-          createAt: Helpers.getUnixTimestampWithinOneWeek(),
+          createAt: Helpers.getUnixTimestampWithinTwoDays(),
         );
       } else {
         return null;

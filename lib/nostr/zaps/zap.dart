@@ -117,7 +117,7 @@ class Zap {
       callback += '?';
     }
 
-    var amount = sats * 1000;
+    var amount = sats.toInt() * 1000;
     callback += 'amount=$amount';
 
     String eventContent = '';

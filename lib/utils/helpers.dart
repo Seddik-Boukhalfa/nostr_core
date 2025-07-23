@@ -127,16 +127,17 @@ class Helpers {
 
   static int get now => DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
-  static int getUnixTimestampWithinOneWeek() {
+  static int getUnixTimestampWithinTwoDays() {
     final now = DateTime.now();
     final weekBefore = now.subtract(
-      const Duration(days: 7),
+      const Duration(days: 2),
     );
 
     final random = Random();
 
     return weekBefore.toSecondsSinceEpoch() +
         random.nextInt(
-            now.toSecondsSinceEpoch() - weekBefore.toSecondsSinceEpoch());
+          now.toSecondsSinceEpoch() - weekBefore.toSecondsSinceEpoch(),
+        );
   }
 }

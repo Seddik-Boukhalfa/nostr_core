@@ -1,6 +1,6 @@
+// ignore_for_file: public_member_api_docs, sort_constructors_first
 import 'dart:convert';
 
-// ignore_for_file: public_member_api_docs, sort_constructors_first
 class WotCalculationData {
   final String pubkey;
   final Set<String> mutes;
@@ -68,4 +68,45 @@ class WotModel {
 
   factory WotModel.fromJson(String source) =>
       WotModel.fromMap(json.decode(source) as Map<String, dynamic>);
+}
+
+class WotScore {
+  final String id;
+  final String pubkey;
+  final double score;
+  final int createdAt;
+  final String originPubkey;
+
+  WotScore({
+    required this.id,
+    required this.pubkey,
+    required this.score,
+    required this.createdAt,
+    required this.originPubkey,
+  });
+
+  Map<String, dynamic> toMap() {
+    return <String, dynamic>{
+      'id': id,
+      'pubkey': pubkey,
+      'score': score,
+      'createdAt': createdAt,
+      'originPubkey': originPubkey,
+    };
+  }
+
+  factory WotScore.fromMap(Map<String, dynamic> map) {
+    return WotScore(
+      id: map['id'] as String,
+      pubkey: map['pubkey'] as String,
+      score: map['score'] as double,
+      createdAt: map['createdAt'] as int,
+      originPubkey: map['originPubkey'] as String,
+    );
+  }
+
+  String toJson() => json.encode(toMap());
+
+  factory WotScore.fromJson(String source) =>
+      WotScore.fromMap(json.decode(source) as Map<String, dynamic>);
 }

@@ -19,9 +19,11 @@ class ZapAction {
     String? specifiedWallet,
     bool? removeNostrEvent,
     List<List<String>>? extraTags,
-    required Function(String) onZapped,
+    required Function(String, bool) onZapped,
   }) async {
     String invoice = '';
+    bool isSuccessful = false;
+
     try {
       final res = await _doGenInvoiceCode(
         sats,
@@ -36,19 +38,23 @@ class ZapAction {
       );
 
       if (res == null) {
+        onZapped('', false);
         return;
       }
 
       invoice = res.key;
 
-      bool sendWithWallet = false;
-
-      if (!sendWithWallet) {
-        await LightningUtil.goToPay(res.key, specifiedWallet!);
-      }
+      isSuccessful = await LightningUtil.goToPay(res.key, specifiedWallet!);
     } finally {
-      onZapped(invoice);
+      onZapped(invoice, isSuccessful);
     }
+  }
+
+  static Future<bool> forwardInvoice({
+    required String invoice,
+    required String specifiedWallet,
+  }) async {
+    return await LightningUtil.goToPay(invoice, specifiedWallet);
   }
 
   static Future<void> handleExternalZap(

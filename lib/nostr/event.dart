@@ -138,6 +138,7 @@ class Event implements BaseEvent {
 
   static List<String> getTags(List<List<String>> list, String tag) {
     List<String> tags = [];
+
     for (var e in list) {
       if (e.length > 1) {
         var key = e[0];
@@ -148,6 +149,7 @@ class Event implements BaseEvent {
         }
       }
     }
+
     return tags;
   }
 
@@ -172,6 +174,10 @@ class Event implements BaseEvent {
 
   List<String> get pTags {
     return getTags(stTags, "p");
+  }
+
+  List<String> get upperPTags {
+    return getTags(stTags, "P");
   }
 
   List<String> get kTags {
@@ -214,16 +220,6 @@ class Event implements BaseEvent {
 
   String? get reply {
     final sTags = getEtags(stTags, "reply");
-    return sTags.isEmpty ? null : sTags[1];
-  }
-
-  String? eventReply() {
-    final sTags = getEtags(stTags, "reply");
-    return sTags.isEmpty ? null : sTags[1];
-  }
-
-  String? eventRoot() {
-    final sTags = getEtags(stTags, "root");
     return sTags.isEmpty ? null : sTags[1];
   }
 

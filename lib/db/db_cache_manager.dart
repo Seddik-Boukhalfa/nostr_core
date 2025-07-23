@@ -17,6 +17,7 @@ import 'package:nostr_core/db/db_user_drafts.dart';
 import 'package:nostr_core/db/db_user_followers.dart';
 import 'package:nostr_core/db/db_user_relay_list.dart';
 import 'package:nostr_core/db/db_user_wot.dart';
+import 'package:nostr_core/db/db_wot_score.dart';
 import 'package:nostr_core/models/contact_list.dart';
 import 'package:nostr_core/models/dm_session_info.dart';
 import 'package:nostr_core/models/event_filter.dart';
@@ -67,6 +68,7 @@ class DbCacheManager extends CacheManager {
         DbUserAppSettingsSchema,
         DbUserWotSchema,
         DbMuteListSchema,
+        DbWotScoreSchema,
       ],
     );
   }
@@ -155,8 +157,8 @@ class DbCacheManager extends CacheManager {
     });
   }
 
-  /// *********************************************************************************************
-  ///
+  // *********************************************************************************************
+
   @override
   ContactList? loadContactList(String pubKey) {
     return isar.dbContactLists.get(pubKey);
@@ -171,6 +173,34 @@ class DbCacheManager extends CacheManager {
         },
       );
     }
+  }
+
+  @override
+  int? getContactWotAvailability({
+    required List<String> originPubkeyList,
+    required String peerPubkey,
+  }) {
+    if (originPubkeyList.isEmpty) {
+      return null;
+    }
+
+    final foundCount = isar.dbContactLists
+        .where()
+        .group(
+          (q) => q
+              .optional(
+                originPubkeyList.isNotEmpty,
+                (q) => q.anyOf(originPubkeyList, (q, p) => q.pubkeyEqualTo(p)),
+              )
+              .and()
+              .optional(
+                peerPubkey.isNotEmpty,
+                (q) => q.contactsElementEqualTo(peerPubkey),
+              ),
+        )
+        .count();
+
+    return foundCount;
   }
 
   @override
@@ -214,6 +244,34 @@ class DbCacheManager extends CacheManager {
   }
 
   @override
+  int? getMutesWotAvailability({
+    required List<String> originPubkeyList,
+    required String peerPubkey,
+  }) {
+    if (originPubkeyList.isEmpty) {
+      return null;
+    }
+
+    final foundCount = isar.dbMuteLists
+        .where()
+        .group(
+          (q) => q
+              .optional(
+                originPubkeyList.isNotEmpty,
+                (q) => q.anyOf(originPubkeyList, (q, p) => q.pubkeyEqualTo(p)),
+              )
+              .and()
+              .optional(
+                peerPubkey.isNotEmpty,
+                (q) => q.mutesElementEqualTo(peerPubkey),
+              ),
+        )
+        .count();
+
+    return foundCount;
+  }
+
+  @override
   Future<void> removeAllMuteLists() async {
     isar.write((isar) {
       isar.dbMuteLists.clear();
@@ -240,7 +298,7 @@ class DbCacheManager extends CacheManager {
 
   @override
   Future<void> saveMuteLists(List<MuteList> muteLists) async {
-    final validContactList = muteLists
+    final validMuteList = muteLists
         .where(
           (c) => c.pubkey.isNotEmpty,
         )
@@ -249,7 +307,7 @@ class DbCacheManager extends CacheManager {
     isar.write(
       (isar) {
         isar.dbMuteLists.putAll(
-          validContactList.map((e) => DbMuteList.fromMuteList(e)).toList(),
+          validMuteList.map((e) => DbMuteList.fromMuteList(e)).toList(),
         );
       },
     );
@@ -323,6 +381,27 @@ class DbCacheManager extends CacheManager {
         .splitNameWordsElementContains(search, caseSensitive: false)
         .or()
         .nip05Contains(search, caseSensitive: false)
+        .findAll()
+        .take(limit);
+  }
+
+  @override
+  Iterable<Metadata> searchRelatedMetadatas(
+    String search,
+    List<String> pubkeys,
+    int limit,
+  ) {
+    return isar.dbMetadatas
+        .where()
+        .anyOf(
+            pubkeys,
+            (q, p) => q.pubkeyEqualTo(p).and().group((inner) => inner
+                .splitDisplayNameWordsElementContains(search,
+                    caseSensitive: false)
+                .or()
+                .splitNameWordsElementContains(search, caseSensitive: false)
+                .or()
+                .nip05Contains(search, caseSensitive: false)))
         .findAll()
         .take(limit);
   }
@@ -546,6 +625,7 @@ class DbCacheManager extends CacheManager {
     if (evs.isEmpty) {
       return null;
     } else {
+      evs.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       event = evs.first;
     }
 
@@ -746,6 +826,136 @@ class DbCacheManager extends CacheManager {
     });
   }
 
+// *********************************************************************************************
+
+  @override
+  WotScore? loadWotScore(String pubkey, String originPubkey) {
+    return isar.dbWotScores
+        .where()
+        .pubkeyEqualTo(pubkey)
+        .and()
+        .originPubkeyEqualTo(originPubkey)
+        .findFirst();
+  }
+
+  @override
+  List<WotScore> loadWotScoreList(List<String> pubkeys, String originPubkey) {
+    if (pubkeys.isEmpty) return [];
+
+    return isar.dbWotScores
+        .where()
+        .anyOf(pubkeys, (q, pubkey) => q.pubkeyEqualTo(pubkey))
+        .and()
+        .originPubkeyEqualTo(originPubkey)
+        .findAll();
+  }
+
+// Add these methods to your DbCacheManager class:
+
+// *********************************************************************************************
+// Batch WoT methods for optimization
+
+  @override
+  Map<String, WotScore> loadWotScoreMap(
+    List<String> pubkeys,
+    String originPubkey,
+  ) {
+    if (pubkeys.isEmpty) return {};
+
+    final scores = isar.dbWotScores
+        .where()
+        .anyOf(pubkeys, (q, pubkey) => q.pubkeyEqualTo(pubkey))
+        .and()
+        .originPubkeyEqualTo(originPubkey)
+        .findAll();
+
+    return {for (final score in scores) score.pubkey: score};
+  }
+
+  @override
+  Future<void> saveWotScoresBatch(List<WotScore> wotScores) async {
+    if (wotScores.isEmpty) return;
+
+    isar.write(
+      (isar) {
+        isar.dbWotScores.putAll(
+          wotScores.map((score) => DbWotScore.fromWotScore(score)).toList(),
+        );
+      },
+    );
+  }
+
+  @override
+  Map<String, Map<String, int>> getWotAvailabilityBatch({
+    required List<String> originPubkeyList,
+    required List<String> peerPubkeys,
+  }) {
+    final results = <String, Map<String, int>>{};
+
+    if (peerPubkeys.isEmpty || originPubkeyList.isEmpty) {
+      return results;
+    }
+
+    // More efficient: get all relevant contact lists at once
+    final relevantContactLists = isar.dbContactLists
+        .where()
+        .anyOf(originPubkeyList, (q, pubkey) => q.pubkeyEqualTo(pubkey))
+        .findAll();
+
+    // More efficient: get all relevant mute lists at once
+    final relevantMuteLists = isar.dbMuteLists
+        .where()
+        .anyOf(originPubkeyList, (q, pubkey) => q.pubkeyEqualTo(pubkey))
+        .findAll();
+
+    // Count follows for each peer
+    final followCounts = <String, int>{};
+    for (final peerPubkey in peerPubkeys) {
+      followCounts[peerPubkey] = relevantContactLists
+          .where((contactList) => contactList.contacts.contains(peerPubkey))
+          .length;
+    }
+
+    // Count mutes for each peer
+    final muteCounts = <String, int>{};
+    for (final peerPubkey in peerPubkeys) {
+      muteCounts[peerPubkey] = relevantMuteLists
+          .where((muteList) => muteList.mutes.contains(peerPubkey))
+          .length;
+    }
+
+    // Combine results
+    for (final pubkey in peerPubkeys) {
+      results[pubkey] = {
+        'following': followCounts[pubkey] ?? 0,
+        'mutes': muteCounts[pubkey] ?? 0,
+      };
+    }
+
+    return results;
+  }
+
+  @override
+  Future<void> removeAllWotScore() async {
+    isar.write((isar) {
+      isar.dbWotScores.clear();
+    });
+  }
+
+  @override
+  Future<void> removeWotScore(String id) async {
+    isar.write((isar) {
+      isar.dbUserWots.delete(id);
+    });
+  }
+
+  @override
+  Future<void> saveWotScore(WotScore wotScore) async {
+    isar.write((isar) {
+      isar.dbWotScores.put(DbWotScore.fromWotScore(wotScore));
+    });
+  }
+
   // *********************************************************************************************
   @override
   Future<void> clearCache() async {
@@ -758,6 +968,9 @@ class DbCacheManager extends CacheManager {
         removeAllRelaySets(),
         removeAllUserRelayLists(),
         removeAllEventStats(),
+        removeAllMuteLists(),
+        removeAllWotScore(),
+        removeAllDmSessionsInfo(),
       ],
     );
   }

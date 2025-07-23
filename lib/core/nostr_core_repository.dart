@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'dart:core';
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:nostr_core/cache/cache_manager.dart';
@@ -46,6 +47,12 @@ const List<String> DEFAULT_BOOTSTRAP_RELAYS = [
   "wss://relay.damus.io",
   "wss://relay.nostr.band",
   'wss://nostr-01.yakihonne.com',
+];
+
+const List<String> DEFAULT_DM_RELAYS = [
+  "wss://relay.damus.io",
+  'wss://nostr-01.yakihonne.com',
+  'wss://relay.0xchat.com',
 ];
 
 class NostrCore {
@@ -558,6 +565,7 @@ class NostrCore {
           break;
 
         default:
+          logger.i(m);
           printLog('Received message not supported: $message');
           break;
       }
@@ -570,10 +578,13 @@ class NostrCore {
     String? subscriptionId = event.subscriptionId;
     if (subscriptionId != null) {
       String requestsMapKey = subscriptionId + relay;
+
       if (subscriptionId.isNotEmpty &&
           requestsMap.containsKey(requestsMapKey)) {
-        EventCallBack? callBack = requestsMap[requestsMapKey]!.eventCallBack;
-        if (callBack != null) callBack(event, relay);
+        EventCallBack? callBack = requestsMap[requestsMapKey]?.eventCallBack;
+        if (callBack != null) {
+          callBack(event, relay);
+        }
       }
     }
   }
@@ -811,7 +822,231 @@ class NostrCore {
     return completer.future;
   }
 
-// Modified calculateWot function using isolates
+  Future<bool> loadWotDataByBatch(
+    List<String> pubkeys, {
+    bool forceRefresh = false,
+    int idleTimeout = 5000,
+  }) async {
+    final completer = Completer<bool>();
+
+    List<String> remainingContactsPubkeys = List.from(pubkeys);
+    List<String> remainingMutesPubkeys = List.from(pubkeys);
+
+    for (final pubkey in pubkeys) {
+      final contactList = cacheManager.loadContactList(pubkey);
+      final muteList = cacheManager.loadMuteList(pubkey);
+
+      if (contactList != null) {
+        remainingContactsPubkeys.remove(pubkey);
+      }
+
+      if (muteList != null) {
+        remainingMutesPubkeys.remove(pubkey);
+      }
+    }
+
+    if (remainingContactsPubkeys.isNotEmpty ||
+        remainingMutesPubkeys.isNotEmpty) {
+      final id = await doQuery(
+        [
+          if (remainingContactsPubkeys.isNotEmpty)
+            Filter(
+              kinds: [EventKind.CONTACT_LIST],
+              authors: remainingContactsPubkeys,
+            ),
+          if (remainingMutesPubkeys.isNotEmpty)
+            Filter(
+              kinds: [EventKind.MUTE_LIST],
+              authors: remainingMutesPubkeys,
+            ),
+        ],
+        [],
+        timeOut: 2,
+        eventCallBack: (event, relay) {
+          if (remainingContactsPubkeys.contains(event.pubkey) &&
+              event.kind == EventKind.CONTACT_LIST) {
+            cacheManager.saveContactList(ContactList.fromEvent(event));
+            remainingContactsPubkeys.remove(event.pubkey);
+          }
+
+          if (remainingMutesPubkeys.contains(event.pubkey) &&
+              event.kind == EventKind.MUTE_LIST) {
+            cacheManager.saveMuteList(MuteList.fromEvent(event));
+            remainingMutesPubkeys.remove(event.pubkey);
+          }
+        },
+        eoseCallBack: (requestId, ok, relay, unCompletedRelays) {},
+      );
+
+      closeRequests([id]);
+
+      completer.complete(true);
+    } else {
+      completer.complete(false);
+    }
+
+    return completer.future;
+  }
+
+  Future<bool> buildWotData({required String pubkey}) async {
+    try {
+      final contactList = await loadContactList(pubkey);
+      final cs = Set<String>.from(contactList?.contacts ?? []);
+
+      if (cs.isEmpty) {
+        return false;
+      }
+
+      const int batchSize = 50;
+
+      final csList = cs.toList();
+      for (var i = 0; i < csList.length; i += batchSize) {
+        final batch = csList.sublist(
+          i,
+          i + batchSize < csList.length ? i + batchSize : csList.length,
+        );
+
+        await loadWotDataByBatch(batch);
+      }
+
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  Map<String, num?> calculatePeerPubkeyWotList({
+    required List<String> peerPubkeys,
+    required String originPubkey,
+  }) {
+    if (peerPubkeys.isEmpty) return {};
+
+    final scores = <String, num?>{};
+
+    try {
+      // Step 1: Batch load existing scores using the new Map method
+      final existingScores = cacheManager.loadWotScoreMap(
+        peerPubkeys,
+        originPubkey,
+      );
+
+      final needCalculation = <String>[];
+
+      for (final pubkey in peerPubkeys) {
+        final existing = existingScores[pubkey]; // O(1) lookup!
+        if (existing != null) {
+          scores[pubkey] = existing.score;
+        } else {
+          needCalculation.add(pubkey);
+        }
+      }
+
+      if (needCalculation.isEmpty) return scores;
+
+      // Step 2: Load contact list once
+      final contactsList = cacheManager.loadContactList(originPubkey);
+      if (contactsList == null || contactsList.contacts.isEmpty) {
+        for (final pubkey in needCalculation) {
+          scores[pubkey] = null;
+        }
+        return scores;
+      }
+
+      final contacts = contactsList.contacts;
+      final newScores = <WotScore>[];
+      final needWotCalculation = <String>[];
+
+      // Step 3: Check direct follows
+      for (final pubkey in needCalculation) {
+        if (contacts.contains(pubkey)) {
+          scores[pubkey] = 10;
+          newScores.add(WotScore(
+            id: uuid.v4(),
+            pubkey: pubkey,
+            score: 10,
+            createdAt: currentUnixTimestampSeconds(),
+            originPubkey: originPubkey,
+          ));
+        } else {
+          needWotCalculation.add(pubkey);
+        }
+      }
+
+      // Step 4: Batch calculate WoT using the new batch method
+      if (needWotCalculation.isNotEmpty) {
+        final wotResults = cacheManager.getWotAvailabilityBatch(
+          originPubkeyList: contacts,
+          peerPubkeys: needWotCalculation,
+        );
+
+        for (final pubkey in needWotCalculation) {
+          final result = wotResults[pubkey];
+          if (result != null) {
+            final following = result['following'] ?? 0;
+            final mutes = result['mutes'] ?? 0;
+
+            final ratio = following / contacts.length;
+            final mutesPenalty = (mutes / contacts.length) * 0.5;
+
+            // Logarithmic scaling for max 8 for indirect
+            final baseScore = math.log(1 + ratio * 10) / math.log(11) * 8;
+            final calculatedScore = (baseScore - mutesPenalty).clamp(0.0, 8.0);
+
+            scores[pubkey] = calculatedScore;
+            newScores.add(WotScore(
+              id: uuid.v4(),
+              pubkey: pubkey,
+              score: calculatedScore,
+              createdAt: currentUnixTimestampSeconds(),
+              originPubkey: originPubkey,
+            ));
+          }
+        }
+      }
+
+      if (newScores.isNotEmpty) {
+        cacheManager.saveWotScoresBatch(newScores);
+      }
+
+      return scores;
+    } catch (e) {
+      logger.i('Error in batch WoT calculation: $e');
+      return _fallbackIndividualCalculation(peerPubkeys, originPubkey);
+    }
+  }
+
+  Map<String, num?> _fallbackIndividualCalculation(
+    List<String> peerPubkeys,
+    String originPubkey,
+  ) {
+    final scores = <String, num?>{};
+
+    for (final pubkey in peerPubkeys) {
+      scores[pubkey] = calculatePeerPubkeyWot(
+            peerPubkey: pubkey,
+            originPubkey: originPubkey,
+          )?.score ??
+          0;
+    }
+
+    return scores;
+  }
+
+  WotScore? calculatePeerPubkeyWot({
+    required String peerPubkey,
+    required String originPubkey,
+  }) {
+    final batchResult = calculatePeerPubkeyWotList(
+      peerPubkeys: [peerPubkey],
+      originPubkey: originPubkey,
+    );
+
+    final score = batchResult[peerPubkey];
+    if (score == null) return null;
+
+    return cacheManager.loadWotScore(peerPubkey, originPubkey);
+  }
+
   Future<Map<String, double>> calculateWot({
     required String pubkey,
     required Set<String> mutes,
@@ -826,16 +1061,12 @@ class NostrCore {
     const int batchSize = 50;
     final Map<String, Set<String>> followings = {};
 
-    // Load the main contact list - make sure to extract just the data
     final contactList = await loadContactList(pubkey);
     final cs = Set<String>.from(contactList?.contacts ?? []);
 
     if (cs.isEmpty) {
       return {};
     }
-
-    // Prepare all the data before spawning isolate to avoid closure issues
-    // Load followings' contact lists in batches
 
     final csList = cs.toList();
     for (var i = 0; i < csList.length; i += batchSize) {
@@ -844,10 +1075,8 @@ class NostrCore {
         i + batchSize < csList.length ? i + batchSize : csList.length,
       );
 
-      // Make sure we're only getting serializable data
-      final followingsContactList = await loadContactListByBatch(batch);
+      final followingsContactList = await loadContactDataByBatch(batch);
 
-      // Create a deep copy to avoid any database references
       for (final key in followingsContactList.keys) {
         followings[key] = Set<String>.from(followingsContactList[key] ?? []);
       }
@@ -914,68 +1143,26 @@ class NostrCore {
   }
 
 // Placeholder for loadContactListByBatch
-  Future<Map<String, List<String>>> loadContactListByBatch(
+  Future<Map<String, List<String>>> loadContactDataByBatch(
     List<String> pubkeys, {
     bool forceRefresh = false,
     int idleTimeout = 5000,
   }) async {
     final completer = Completer<Map<String, List<String>>>();
     Map<String, List<String>> contactsList = {};
-    Map<String, List<String>> mutesList = {};
 
     List<String> remainingContactsPubkeys = List.from(pubkeys);
-    List<String> remainingMutesPubkeys = List.from(pubkeys);
 
     for (final pubkey in pubkeys) {
       final contactList = cacheManager.loadContactList(pubkey);
-      final muteList = cacheManager.loadMuteList(pubkey);
 
       if (contactList != null) {
         contactsList[pubkey] = contactList.contacts;
         remainingContactsPubkeys.remove(pubkey);
       }
-
-      if (muteList != null) {
-        mutesList[pubkey] = muteList.mutes;
-        remainingMutesPubkeys.remove(pubkey);
-      }
     }
 
-    if (remainingContactsPubkeys.isNotEmpty ||
-        remainingMutesPubkeys.isNotEmpty) {
-      final id = await doQuery(
-        [
-          if (remainingContactsPubkeys.isNotEmpty)
-            Filter(
-              kinds: [EventKind.CONTACT_LIST],
-              authors: remainingContactsPubkeys,
-            ),
-          if (remainingMutesPubkeys.isNotEmpty)
-            Filter(
-              kinds: [EventKind.MUTE_LIST],
-              authors: remainingMutesPubkeys,
-            ),
-        ],
-        [],
-        timeOut: 2,
-        eventCallBack: (event, relay) {
-          if (contactsList[event.pubkey] == null) {
-            contactsList[event.pubkey] = ContactList.fromEvent(event).contacts;
-          }
-
-          if (mutesList[event.pubkey] == null) {
-            mutesList[event.pubkey] = MuteList.fromEvent(event).mutes;
-          }
-        },
-        eoseCallBack: (requestId, ok, relay, unCompletedRelays) {},
-      );
-
-      closeRequests([id]);
-
-      completer.complete(contactsList);
-    } else {
-      completer.complete(contactsList);
-    }
+    completer.complete(contactsList);
 
     return completer.future;
   }

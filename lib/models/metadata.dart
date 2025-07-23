@@ -3,13 +3,14 @@
 
 import 'dart:convert';
 
+import 'package:equatable/equatable.dart';
 import 'package:nostr_core/nostr/nostr.dart';
 import 'package:nostr_core/utils/extensions.dart';
 import 'package:nostr_core/utils/helpers.dart';
 import 'package:nostr_core/utils/static_properties.dart';
 import 'package:string_validator/string_validator.dart';
 
-class Metadata {
+class Metadata extends Equatable {
   final String pubkey;
   final String name;
   final String displayName;
@@ -262,19 +263,19 @@ class Metadata {
     );
   }
 
-  // @override
-  // List<dynamic> get props => [
-  //       pubkey,
-  //       name,
-  //       displayName,
-  //       picture,
-  //       banner,
-  //       website,
-  //       about,
-  //       nip05,
-  //       lud16,
-  //       lud06,
-  //       createdAt,
-  //       isDeleted,
-  //     ];
+  @override
+  List<dynamic> get props => [
+        pubkey,
+        name,
+        displayName,
+        picture,
+        banner,
+        website,
+        about,
+        nip05,
+        lud16,
+        lud06,
+        createdAt,
+        isDeleted,
+      ];
 }

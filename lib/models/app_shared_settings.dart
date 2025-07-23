@@ -1660,9 +1660,9 @@ class RelaysFeed extends BaseFeed {
     );
   }
 
-  Map<String, FeedRelay> getMappedContent() {
+  Map<String, String> getMappedContent() {
     return {
-      for (final relay in relays) relay.id: relay,
+      for (final relay in relays) relay.id: relay.url,
     };
   }
 

@@ -99,7 +99,7 @@ class EventStats extends Equatable {
 
     zaps.forEach(
       (user, groupedZaps) {
-        if (!mutes.contains(user)) {
+        if (!mutes.contains(user) && groupedZaps.isNotEmpty) {
           zappers[user] = MapEntry(
             groupedZaps.keys.first,
             groupedZaps.values.reduce((a, b) => a + b),
@@ -240,6 +240,56 @@ class EventStats extends Equatable {
     return this;
   }
 
+  EventStats addOptimisticZap({
+    required String zapId,
+    required String zapperPubkey,
+    required int amount,
+  }) {
+    final newZaps = Map<String, Map<String, int>>.from(zaps);
+    newZaps[zapperPubkey] = {
+      ...zaps[zapperPubkey] ?? {},
+      zapId: amount,
+    };
+
+    return copyWith(
+      zaps: newZaps,
+      newestCreatedAt: getNewestCreatedAt(currentUnixTimestampSeconds()),
+    );
+  }
+
+// Helper method to check if a zap ID is temporary
+  bool isOptimisticZap(String zapId) => zapId.startsWith('temp_');
+
+// Method to replace optimistic zap with real one
+  EventStats replaceOptimisticZap({
+    required String tempZapId,
+    required Event realZapEvent,
+  }) {
+    final newZaps = Map<String, Map<String, int>>.from(zaps);
+
+    for (final entry in newZaps.entries) {
+      if (entry.value.containsKey(tempZapId)) {
+        entry.value.remove(tempZapId);
+        break;
+      }
+    }
+
+    // Add the real zap using existing logic
+    final realZapperPubkey = getZapPubkey(realZapEvent.stTags).first.isNotEmpty
+        ? getZapPubkey(realZapEvent.stTags).first
+        : realZapEvent.pubkey;
+
+    newZaps[realZapperPubkey] = {
+      ...newZaps[realZapperPubkey] ?? {},
+      realZapEvent.id: getZapEvent(realZapEvent).toInt(),
+    };
+
+    return copyWith(
+      zaps: newZaps,
+      newestCreatedAt: getNewestCreatedAt(realZapEvent.createdAt),
+    );
+  }
+
   EventStats addEvents(List<Event> events) {
     final updatedReactions = Map<String, String>.from(reactions);
     final updatedReplies = Map<String, String>.from(replies);
@@ -368,11 +418,12 @@ class EventStats extends Equatable {
   }) {
     return EventStats(
       eventId: eventId ?? this.eventId,
-      reactions: reactions ?? Map.from(this.reactions),
-      replies: replies ?? Map.from(this.replies),
-      quotes: quotes ?? Map.from(this.quotes),
-      reposts: reposts ?? Map.from(this.reposts),
-      zaps: zaps ?? Map.from(this.zaps),
+      reactions:
+          reactions != null ? Map.from(reactions) : Map.from(this.reactions),
+      replies: replies != null ? Map.from(replies) : Map.from(this.replies),
+      quotes: quotes != null ? Map.from(quotes) : Map.from(this.quotes),
+      reposts: reposts != null ? Map.from(reposts) : Map.from(this.reposts),
+      zaps: zaps != null ? Map.from(zaps) : Map.from(this.zaps),
       newestCreatedAt: newestCreatedAt ?? this.newestCreatedAt,
     );
   }
@@ -388,5 +439,3 @@ class EventStats extends Equatable {
         newestCreatedAt,
       ];
 }
-
-class ZappersQuickStats {}

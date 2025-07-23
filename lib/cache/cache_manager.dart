@@ -42,17 +42,40 @@ abstract class CacheManager {
   Future<void> removeRelaySet(String name, String pubKey);
   Future<void> removeAllRelaySets();
 
+  WotScore? loadWotScore(String pubkey, String originPubkey);
+  List<WotScore> loadWotScoreList(List<String> pubkeys, String originPubkey);
+  Future<void> saveWotScoresBatch(List<WotScore> wotScores);
+  Future<void> saveWotScore(WotScore wotScore);
+  Future<void> removeWotScore(String id);
+  Future<void> removeAllWotScore();
+  Map<String, WotScore> loadWotScoreMap(
+    List<String> pubkeys,
+    String originPubkey,
+  );
+  Map<String, Map<String, int>> getWotAvailabilityBatch({
+    required List<String> originPubkeyList,
+    required List<String> peerPubkeys,
+  });
+
   Future<void> saveContactList(ContactList contactList);
   Future<void> saveContactLists(List<ContactList> contactLists);
   ContactList? loadContactList(String pubKey);
   Future<void> removeContactList(String pubKey);
   Future<void> removeAllContactLists();
+  int? getContactWotAvailability({
+    required List<String> originPubkeyList,
+    required String peerPubkey,
+  });
 
   Future<void> saveMuteList(MuteList muteList);
   Future<void> saveMuteLists(List<MuteList> muteLists);
   MuteList? loadMuteList(String pubKey);
   Future<void> removeMuteList(String pubKey);
   Future<void> removeAllMuteLists();
+  int? getMutesWotAvailability({
+    required List<String> originPubkeyList,
+    required String peerPubkey,
+  });
 
   Future<void> saveMetadata(Metadata metadata);
   Future<void> saveMetadatas(List<Metadata> metadatas);
@@ -63,6 +86,11 @@ abstract class CacheManager {
   Future<void> removeMetadata(String pubKey);
   Future<void> removeAllMetadatas();
   Iterable<Metadata> searchMetadatas(String search, int limit);
+  Iterable<Metadata> searchRelatedMetadatas(
+    String search,
+    List<String> pubkeys,
+    int limit,
+  );
 
   Future<void> saveNip05(Nip05 nip05);
   Future<void> saveNip05s(List<Nip05> nip05s);
