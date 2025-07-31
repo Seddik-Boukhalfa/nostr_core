@@ -29,9 +29,7 @@ environment:
 # versions available, run `flutter pub outdated`.
 dependencies:
   amberflutter:
-    git:
-      url: https://github.com/Seddik-Boukhalfa/amberflutter.git
-      ref: master
+    path: ../amberflutter/
   android_intent_plus: ^5.1.0
   bech32: ^0.2.2
   bip340: ^0.3.0
@@ -43,18 +41,18 @@ dependencies:
   equatable: ^2.0.5
   flutter:
     sdk: flutter
-  flutter_bloc: ^8.1.6
+  flutter_bloc: ^9.1.1
   hex: ^0.2.0
   http: ^1.2.0
   isar: ^4.0.0-dev.14
   isar_flutter_libs: ^4.0.0-dev.14
   kepler: ^1.0.3
-  sqflite: ^2.3.2
-  sqflite_common_ffi: ^2.3.2
-  path: ^1.8.3
   logger: ^2.4.0
+  path: ^1.8.3
   path_provider: ^2.1.4
   pointycastle: ^3.9.1
+  sqflite: ^2.3.2
+  sqflite_common_ffi: ^2.3.2
   string_validator: ^1.1.0
   url_launcher: ^6.3.0
   uuid: ^4.5.1
